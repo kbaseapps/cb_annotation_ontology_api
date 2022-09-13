@@ -1,0 +1,19 @@
+{
+    "name" : "Add Annotation Ontology Events",
+    "short_description" : 
+        "Adds a new ontology event to an input genome.",
+
+    "long_description" : "todo: write longer description",
+
+    "tags" : {
+        "categories" : [],
+        "input": {
+            "file_types": [],
+            "kb_types": ["KBaseGenomes.Genome"]
+        },
+        "output": {
+            "file_types": [],
+            "kb_types": ["KBaseGenomes.Genome"]
+        }
+    }
+}
