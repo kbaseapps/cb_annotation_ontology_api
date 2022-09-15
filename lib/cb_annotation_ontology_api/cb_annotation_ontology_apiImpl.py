@@ -5,6 +5,7 @@ import os
 import json
 from installed_clients.KBaseReportClient import KBaseReport
 from installed_clients.DataFileUtilClient import DataFileUtil
+from installed_clients.GenomeFileUtilClient import GenomeFileUtil
 from installed_clients.WorkspaceClient import Workspace as workspaceService
 from cb_annotation_ontology_api.annotation_ontology_api import AnnotationOntologyAPI
 #END_HEADER
@@ -40,6 +41,7 @@ class cb_annotation_ontology_api:
         self.config["data_directory"] = "/kb/module/data/"
         self.config['SDK_CALLBACK_URL'] = os.environ['SDK_CALLBACK_URL']
         self.dfu_client = DataFileUtil(self.config['SDK_CALLBACK_URL'])
+        self.gfu_client = GenomeFileUtil(self.config['SDK_CALLBACK_URL'])
         self.config['KB_AUTH_TOKEN'] = os.environ['KB_AUTH_TOKEN']
         self.ws_client = workspaceService(config["workspace-url"])
         self.shared_folder = config['scratch']
@@ -108,7 +110,7 @@ class cb_annotation_ontology_api:
         # ctx is the context object
         # return variables are: output
         #BEGIN add_annotation_ontology_events
-        anno_api = AnnotationOntologyAPI(self.config,self.ws_client,self.dfu_client)
+        anno_api = AnnotationOntologyAPI(self.config,self.ws_client,self.dfu_client,self.gfu_client)
         output = anno_api.add_annotation_ontology_events(params)
         #END add_annotation_ontology_events
 

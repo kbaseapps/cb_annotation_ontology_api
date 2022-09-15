@@ -40,9 +40,10 @@ ontology_hash = {
 };
 
 class AnnotationOntologyAPI:
-    def __init__(self,config,ws_client = None, dfu_client = None):
+    def __init__(self,config,ws_client = None, dfu_client = None,gfu_client = None):
         self.ws_client = ws_client
         self.dfu_client = dfu_client
+        self.gfu_client = gfu_client
         self.alias_hash = {}
         self.term_names = {}
         self.config = config
@@ -512,19 +513,18 @@ class AnnotationOntologyAPI:
             if params["type"] == "KBaseGenomes.Genome":
                 self.check_genome(params["object"],ref)
             # Saving genome/metagenome object to workspace
-            ws_params = {
-                'objects': [{
-                    'data': params["object"],
-                    'name': params["output_name"],
-                    'type': params["type"],
-                    'provenance': provenance
-                }]
+            gfu_param = {
+                "name" : params["output_name"],
+                "data" : params["object"],
+                "upgrade" : 1,
+                "provenance" : params["provenance"],
+                "hidden" : 0
             }
             if isinstance(params["output_workspace"], int):
-                ws_params['id'] = params["output_workspace"]
+                gfu_param['id'] = params["output_workspace"]
             else:
-                ws_params['workspace'] = params["output_workspace"]
-            save_output = self.ws_client.save_objects(ws_params)
+                gfu_param['workspace'] = params["output_workspace"]
+            save_output = self.gfu_client.save_one_genome(gfu_param);
             output["output_ref"] = str(save_output[0][6])+"/"+str(save_output[0][0])+"/"+str(save_output[0][4])
             output["output_name"] = str(save_output[0][1])
         else:            
