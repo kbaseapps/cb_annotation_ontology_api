@@ -37,6 +37,7 @@ class cb_annotation_ontology_api:
     def __init__(self, config):
         #BEGIN_CONSTRUCTOR
         self.config = config
+        self.config["data_directory"] = "/kb/module/data/"
         self.config['SDK_CALLBACK_URL'] = os.environ['SDK_CALLBACK_URL']
         self.dfu_client = DataFileUtil(self.config['SDK_CALLBACK_URL'])
         self.config['KB_AUTH_TOKEN'] = os.environ['KB_AUTH_TOKEN']
