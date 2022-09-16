@@ -305,6 +305,8 @@ class AnnotationOntologyAPI:
     
     def add_annotation_ontology_events(self,params):
         #Pull the object from the workspace is necessary
+        if "provenance" not in params:
+            params["provenance"] = []
         ref = None
         if "object" not in params or params["object"] == None:
             if "input_workspace" not in params:
