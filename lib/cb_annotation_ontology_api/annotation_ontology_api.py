@@ -525,8 +525,8 @@ class AnnotationOntologyAPI:
             else:
                 gfu_param['workspace'] = params["output_workspace"]
             save_output = self.gfu_client.save_one_genome(gfu_param);
-            output["output_ref"] = str(save_output[6])+"/"+str(save_output[0])+"/"+str(save_output[4])
-            output["output_name"] = str(save_output[1])
+            output["output_ref"] = str(save_output["info"][6])+"/"+str(save_output["info"][0])+"/"+str(save_output["info"][4])
+            output["output_name"] = str(save_output["info"][1])
         else:            
             #Returning object if save not requested
             output["object"] = params["object"]
