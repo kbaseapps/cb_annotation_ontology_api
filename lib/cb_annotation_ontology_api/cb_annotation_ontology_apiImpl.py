@@ -76,8 +76,6 @@ class cb_annotation_ontology_api:
         #BEGIN get_annotation_ontology_events
         anno_api = AnnotationOntologyAPI(self.config,self.ws_client,self.dfu_client)
         output = anno_api.get_annotation_ontology_events(params)
-        with open(self.shared_folder+'/debug.json', 'w') as outfile:
-            json.dump(output, outfile,indent=4)
         #END get_annotation_ontology_events
 
         # At some point might do deeper type checking...
@@ -110,6 +108,8 @@ class cb_annotation_ontology_api:
         # ctx is the context object
         # return variables are: output
         #BEGIN add_annotation_ontology_events
+        with open(self.shared_folder+'/debug.json', 'w') as outfile:
+            json.dump(params, outfile,indent=4)
         anno_api = AnnotationOntologyAPI(self.config,self.ws_client,self.dfu_client,self.gfu_client)
         output = anno_api.add_annotation_ontology_events(params)
         #END add_annotation_ontology_events
