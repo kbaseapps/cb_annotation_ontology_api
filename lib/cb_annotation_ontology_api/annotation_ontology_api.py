@@ -523,7 +523,8 @@ class AnnotationOntologyAPI:
                 "hidden" : 0
             }
             if isinstance(params["output_workspace"], int):
-                gfu_param['id'] = params["output_workspace"]
+                info = self.ws_client.get_workspace_info({"id":params["output_workspace"]});
+                gfu_param['workspace'] = info[1]
             else:
                 gfu_param['workspace'] = params["output_workspace"]
             save_output = self.gfu_client.save_one_genome(gfu_param);
