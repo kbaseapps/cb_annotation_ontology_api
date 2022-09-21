@@ -108,8 +108,8 @@ class cb_annotation_ontology_api:
         # ctx is the context object
         # return variables are: output
         #BEGIN add_annotation_ontology_events
-        with open(self.shared_folder+'/cb_'+params["output_name"]+".json", 'w') as outfile:
-            json.dump(params, outfile,indent=4)
+        #with open(self.shared_folder+'/cb_'+params["output_name"]+".json", 'w') as outfile:
+        #    json.dump(params, outfile,indent=4)
         anno_api = AnnotationOntologyAPI(self.config,self.ws_client,self.dfu_client,self.gfu_client)
         output = anno_api.add_annotation_ontology_events(params)
         #END add_annotation_ontology_events

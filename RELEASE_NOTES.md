@@ -1,2 +1,2 @@
-### Version 0.0.9
+### Version 1.0.0
 - Initial release of call back annotation ontology API
