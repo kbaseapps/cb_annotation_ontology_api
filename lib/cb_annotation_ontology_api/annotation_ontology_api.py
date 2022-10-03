@@ -91,7 +91,7 @@ class AnnotationOntologyAPI:
                         modelseed = "MSRXN:"+items[0]
                         if modelseed in self.alias_hash["MSRXN"]:
                             modelseed = self.alias_hash["MSRXN"][modelseed][0]
-                        if items[1] not in self.alias_hash["EC"]:
+                        if "EC:"+items[1] not in self.alias_hash["EC"]:
                             self.alias_hash["EC"]["EC:"+items[1]] = []
                         self.alias_hash["EC"]["EC:"+items[1]].append(modelseed)
             elif namespace == "META" or namespace == "RO" or namespace == "BIGG" or namespace == "RHEA":
@@ -301,6 +301,8 @@ class AnnotationOntologyAPI:
                                                     if event_index in feature["ontology_evidence"][original_term]:
                                                         termdata["evidence"] = feature["ontology_evidence"][original_term][event_index]
                                             events_array[event_index]["ontology_terms"][feature["id"]].append(termdata)
+        with open('AliasHash.json', 'w') as outfile:
+            json.dump(self.alias_hash, outfile, indent=4)
         return output
     
     def add_annotation_ontology_events(self,params):
