@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import time
+import json
 import unittest
 from configparser import ConfigParser
 
@@ -63,6 +64,10 @@ class cb_annotation_ontology_apiTest(unittest.TestCase):
         #
         # Check returned data with
         # self.assertEqual(ret[...], ...) or other unittest methods
+        f = open('/kb/module/test/debug.json')
+        testparams = json.load(f)
+        self.serviceImpl.add_annotation_ontology_events(self.ctx,testparams)
+        
         output = self.serviceImpl.add_annotation_ontology_events(self.ctx,{
             "input_ref" : "Escherichia_coli_K-12_MG1655",
             "input_workspace" : 68056,

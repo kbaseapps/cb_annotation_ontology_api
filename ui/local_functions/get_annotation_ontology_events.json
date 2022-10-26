@@ -3,7 +3,7 @@
     "short_description" : 
         "Get annotation ontology events from genome.",
 
-    "long_description" : "todo: write longer description",
+    "long_description" : "This function retrieves the ontology terms from a KBase object",
 
     "tags" : {
         "categories" : [],

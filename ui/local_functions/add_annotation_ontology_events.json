@@ -3,7 +3,7 @@
     "short_description" : 
         "Adds a new ontology event to an input genome.",
 
-    "long_description" : "todo: write longer description",
+    "long_description" : "Adds a set of ontology events and ontology terms to a KBase genome object, which can be either specified as an object or referenced from the workspace.",
 
     "tags" : {
         "categories" : [],
