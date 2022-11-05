@@ -435,7 +435,7 @@ class AnnotationOntologyAPI:
                 for gene in genes:
                     if gene in feature_hash:
                         feature = feature_hash[gene]
-                        self.add_feature_ontology_terms(feature,new_event,event["ontology_terms"][currgene],feature_hash,params,True)
+                        self.add_feature_ontology_terms(feature,new_event,event["ontology_terms"][currgene],feature_hash,params,event_index,True)
         output["ftrs_found"] = len(feature_found_hash)
         for term in terms_not_found:
             output["terms_not_found"].append(term)
@@ -498,15 +498,15 @@ class AnnotationOntologyAPI:
                 output["feature_object"] = params["feature_object"]
         return output
     
-    def add_feature_ontology_terms(self,feature,new_event,term_data,feature_hash,params,initial=True):
+    def add_feature_ontology_terms(self,feature,new_event,term_data,feature_hash,params,event_index,initial=True):
         if not initial and params["propagate_annotations"] == 1:
             if "cdss" in feature:
                 for cds_id in feature["cdss"]:
                     if cds_id in feature_hash:
-                        self.add_feature_ontology_terms(feature_hash[cds_id],new_event,term_data,feature_hash,params,False)
+                        self.add_feature_ontology_terms(feature_hash[cds_id],new_event,term_data,feature_hash,params,event_index,False)
             if "parent_gene" in feature:
                 if feature["parent_gene"] in feature_hash:
-                    self.add_feature_ontology_terms(feature_hash[feature["parent_gene"]],new_event,term_data,feature_hash,params,False)
+                    self.add_feature_ontology_terms(feature_hash[feature["parent_gene"]],new_event,term_data,feature_hash,params,event_index,False)
         if "ontology_terms" not in feature:
             feature["ontology_terms"] = {}
         if new_event["id"] not in feature["ontology_terms"]:
