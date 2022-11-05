@@ -47,6 +47,7 @@ class AnnotationOntologyAPI:
         self.alias_hash = {}
         self.term_names = {}
         self.config = config
+        self.ontologies_present = None
     
     def process_workspace_identifiers(self,id_or_ref, workspace=None):
         """
@@ -306,6 +307,7 @@ class AnnotationOntologyAPI:
         return output
     
     def add_annotation_ontology_events(self,params):
+        self.ontologies_present = {}
         if "propagate_annotations" not in params:
             params["propagate_annotations"] = 1  
         #Pull the object from the workspace is necessary
@@ -324,7 +326,6 @@ class AnnotationOntologyAPI:
             "ftrs_not_found" : [],"ftrs_found" : 0,"terms_not_found" : []
         }
         #Pulling existing ontology so we can standardize and check for matches
-        ontologies_present = {}
         events = self.get_annotation_ontology_events(params)["events"]
         if "clear_existing" in params and params["clear_existing"] == 1: 
             events = []
@@ -439,7 +440,7 @@ class AnnotationOntologyAPI:
         output["ftrs_found"] = len(feature_found_hash)
         for term in terms_not_found:
             output["terms_not_found"].append(term)
-        params["object"]["ontologies_present"] = ontologies_present
+        params["object"]["ontologies_present"] = self.ontologies_present
         #Saving object if requested but not if it's an AMA
         if params["save"] == 1:
             #Setting provenance
@@ -531,23 +532,23 @@ class AnnotationOntologyAPI:
                             if subterm not in feature["ontology_terms"][new_event["id"]]:
                                 feature["ontology_terms"][new_event["id"]][subterm] = []
                             feature["ontology_terms"][new_event["id"]][subterm].append(event_index)
-                            if new_event["id"] not in ontologies_present:
-                                ontologies_present[new_event["id"]] = {}
-                            ontologies_present[new_event["id"]][subterm] = self.get_term_name(new_event["id"],subterm)                        
-                            if ontologies_present[new_event["id"]][subterm] == "Unknown":
+                            if new_event["id"] not in self.ontologies_present:
+                                self.ontologies_present[new_event["id"]] = {}
+                            self.ontologies_present[new_event["id"]][subterm] = self.get_term_name(new_event["id"],subterm)                        
+                            if self.ontologies_present[new_event["id"]][subterm] == "Unknown":
                                 terms_not_found[subterm] = 1
             if term["term"] == None:
                 continue
             if term["term"] not in feature["ontology_terms"][new_event["id"]]:
                 feature["ontology_terms"][new_event["id"]][term["term"]] = []
             feature["ontology_terms"][new_event["id"]][term["term"]].append(event_index)
-            if new_event["id"] not in ontologies_present:
-                ontologies_present[new_event["id"]] = {}
+            if new_event["id"] not in self.ontologies_present:
+                self.ontologies_present[new_event["id"]] = {}
             if "name" in term:
-                ontologies_present[new_event["id"]][term["term"]] = term["name"]
+                self.ontologies_present[new_event["id"]][term["term"]] = term["name"]
             else:
-                ontologies_present[new_event["id"]][term["term"]] = self.get_term_name(new_event["id"],term["term"])
-                if ontologies_present[new_event["id"]][term["term"]] == "Unknown":
+                self.ontologies_present[new_event["id"]][term["term"]] = self.get_term_name(new_event["id"],term["term"])
+                if self.ontologies_present[new_event["id"]][term["term"]] == "Unknown":
                     terms_not_found[term["term"]] = 1
             if "evidence" in term:
                 if "ontology_evidence" not in feature:
