@@ -539,12 +539,14 @@ class AnnotationOntologyAPI:
                                 terms_not_found[subterm] = 1
             if term["term"] == None:
                 continue
+            if new_event["id"] not in self.ontologies_present:
+                self.ontologies_present[new_event["id"]] = {}
             #Dealing with custom names when specified for a term
             if "name" in term or "suffix" in term:
                 if "suffix" in term:
                     term["name"] = self.get_term_name(new_event["id"],term["term"])+term["suffix"]
                 #If a custom name is specified, for now, we need to make sure the term is unique or the name will be overwritten
-                if term["term"] in self.ontologies_present[new_event["id"]] and self.ontologies_present[new_event["id"]] != term["name"]:
+                if term["term"] in self.ontologies_present[new_event["id"]] and self.ontologies_present[new_event["id"]][term["term"]] != term["name"]:
                     index = 1
                     while term["term"]+";"+str(index) in self.ontologies_present[new_event["id"]] and self.ontologies_present[new_event["id"]][term["term"]+";"+str(index)] != term["name"]:
                         index += 1
@@ -557,8 +559,6 @@ class AnnotationOntologyAPI:
             if term["term"] not in feature["ontology_terms"][new_event["id"]]:
                 feature["ontology_terms"][new_event["id"]][term["term"]] = []
             feature["ontology_terms"][new_event["id"]][term["term"]].append(event_index)
-            if new_event["id"] not in self.ontologies_present:
-                self.ontologies_present[new_event["id"]] = {}
             if "evidence" in term:
                 if "ontology_evidence" not in feature:
                     feature["ontology_evidence"] = {}
