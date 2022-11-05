@@ -306,6 +306,8 @@ class AnnotationOntologyAPI:
         return output
     
     def add_annotation_ontology_events(self,params):
+        if "propagate_annotations" not in params:
+            params["propagate_annotations"] = 1  
         #Pull the object from the workspace is necessary
         if "provenance" not in params:
             params["provenance"] = []
@@ -433,51 +435,7 @@ class AnnotationOntologyAPI:
                 for gene in genes:
                     if gene in feature_hash:
                         feature = feature_hash[gene]
-                        if "ontology_terms" not in feature:
-                            feature["ontology_terms"] = {}
-                        if new_event["id"] not in feature["ontology_terms"]:
-                            feature["ontology_terms"][new_event["id"]] = {}
-                        for term in event["ontology_terms"][currgene]:
-                            if term["term"].split(":")[0] != new_event["id"]:
-                                term["term"] = new_event["id"]+":"+term["term"]
-                            #If this is a SEED role, translate to an SSO
-                            if new_event["id"] == "SSO" and re.search('^SSO:\d+$', term["term"]) == None:
-                                term["term"] = re.sub("^SSO:","",term["term"])
-                                terms = re.split("\s*;\s+|\s+[\@\/]\s+",term["term"])
-                                first = 1
-                                for subterm in terms:
-                                    if first == 1:
-                                        #Only the first term completes the rest of this code
-                                        term["term"] = self.translate_rast_function_to_sso(subterm)
-                                        first = 0
-                                    else:
-                                        #Sub sterms need to be added independently
-                                        subterm = self.translate_rast_function_to_sso(subterm)
-                                        if subterm != None:
-                                            if subterm not in feature["ontology_terms"][new_event["id"]]:
-                                                feature["ontology_terms"][new_event["id"]][subterm] = []
-                                            feature["ontology_terms"][new_event["id"]][subterm].append(event_index)
-                                            if new_event["id"] not in ontologies_present:
-                                                ontologies_present[new_event["id"]] = {}
-                                            ontologies_present[new_event["id"]][subterm] = self.get_term_name(new_event["id"],subterm)                        
-                                            if ontologies_present[new_event["id"]][subterm] == "Unknown":
-                                                terms_not_found[subterm] = 1
-                            if term["term"] == None:
-                                continue
-                            if term["term"] not in feature["ontology_terms"][new_event["id"]]:
-                                feature["ontology_terms"][new_event["id"]][term["term"]] = []
-                            feature["ontology_terms"][new_event["id"]][term["term"]].append(event_index)
-                            if new_event["id"] not in ontologies_present:
-                                ontologies_present[new_event["id"]] = {}
-                            ontologies_present[new_event["id"]][term["term"]] = self.get_term_name(new_event["id"],term["term"])
-                            if ontologies_present[new_event["id"]][term["term"]] == "Unknown":
-                                terms_not_found[term["term"]] = 1
-                            if "evidence" in term:
-                                if "ontology_evidence" not in feature:
-                                    feature["ontology_evidence"] = {}
-                                if term["term"] not in feature["ontology_evidence"]:
-                                    feature["ontology_evidence"][term["term"]] = {}
-                                feature["ontology_evidence"][term["term"]][event_index] = term["evidence"]
+                        self.add_feature_ontology_terms(feature,new_event,event["ontology_terms"][currgene],feature_hash,params,True)
         output["ftrs_found"] = len(feature_found_hash)
         for term in terms_not_found:
             output["terms_not_found"].append(term)
@@ -539,6 +497,64 @@ class AnnotationOntologyAPI:
             if "feature_object" in params:
                 output["feature_object"] = params["feature_object"]
         return output
+    
+    def add_feature_ontology_terms(self,feature,new_event,term_data,feature_hash,params,initial=True):
+        if not initial and params["propagate_annotations"] == 1:
+            if "cdss" in feature:
+                for cds_id in feature["cdss"]:
+                    if cds_id in feature_hash:
+                        self.add_feature_ontology_terms(feature_hash[cds_id],new_event,term_data,feature_hash,params,False)
+            if "parent_gene" in feature:
+                if feature["parent_gene"] in feature_hash:
+                    self.add_feature_ontology_terms(feature_hash[feature["parent_gene"]],new_event,term_data,feature_hash,params,False)
+        if "ontology_terms" not in feature:
+            feature["ontology_terms"] = {}
+        if new_event["id"] not in feature["ontology_terms"]:
+            feature["ontology_terms"][new_event["id"]] = {}
+        for term in term_data:
+            if term["term"].split(":")[0] != new_event["id"]:
+                term["term"] = new_event["id"]+":"+term["term"]
+            #If this is a SEED role, translate to an SSO
+            if new_event["id"] == "SSO" and re.search('^SSO:\d+$', term["term"]) == None:
+                term["term"] = re.sub("^SSO:","",term["term"])
+                terms = re.split("\s*;\s+|\s+[\@\/]\s+",term["term"])
+                first = 1
+                for subterm in terms:
+                    if first == 1:
+                        #Only the first term completes the rest of this code
+                        term["term"] = self.translate_rast_function_to_sso(subterm)
+                        first = 0
+                    else:
+                        #Sub sterms need to be added independently
+                        subterm = self.translate_rast_function_to_sso(subterm)
+                        if subterm != None:
+                            if subterm not in feature["ontology_terms"][new_event["id"]]:
+                                feature["ontology_terms"][new_event["id"]][subterm] = []
+                            feature["ontology_terms"][new_event["id"]][subterm].append(event_index)
+                            if new_event["id"] not in ontologies_present:
+                                ontologies_present[new_event["id"]] = {}
+                            ontologies_present[new_event["id"]][subterm] = self.get_term_name(new_event["id"],subterm)                        
+                            if ontologies_present[new_event["id"]][subterm] == "Unknown":
+                                terms_not_found[subterm] = 1
+            if term["term"] == None:
+                continue
+            if term["term"] not in feature["ontology_terms"][new_event["id"]]:
+                feature["ontology_terms"][new_event["id"]][term["term"]] = []
+            feature["ontology_terms"][new_event["id"]][term["term"]].append(event_index)
+            if new_event["id"] not in ontologies_present:
+                ontologies_present[new_event["id"]] = {}
+            if "name" in term:
+                ontologies_present[new_event["id"]][term["term"]] = term["name"]
+            else:
+                ontologies_present[new_event["id"]][term["term"]] = self.get_term_name(new_event["id"],term["term"])
+                if ontologies_present[new_event["id"]][term["term"]] == "Unknown":
+                    terms_not_found[term["term"]] = 1
+            if "evidence" in term:
+                if "ontology_evidence" not in feature:
+                    feature["ontology_evidence"] = {}
+                if term["term"] not in feature["ontology_evidence"]:
+                    feature["ontology_evidence"][term["term"]] = {}
+                feature["ontology_evidence"][term["term"]][event_index] = term["evidence"]
     
     def process_feature_aliases(self,ftr,alias_hash,lc_alias_hash):
         if "aliases" in ftr:
