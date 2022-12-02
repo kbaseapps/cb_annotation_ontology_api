@@ -436,7 +436,9 @@ class AnnotationOntologyAPI:
                 for gene in genes:
                     if gene in feature_hash:
                         feature = feature_hash[gene]
-                        self.add_feature_ontology_terms(feature,new_event,event["ontology_terms"][currgene],feature_hash,params,event_index,True)
+                        add_ftr_output = self.add_feature_ontology_terms(feature,new_event,event["ontology_terms"][currgene],feature_hash,params,event_index,True)
+                        for term in add_ftr_output["terms_not_found"]:
+                            terms_not_found[term] = 1
         output["ftrs_found"] = len(feature_found_hash)
         for term in terms_not_found:
             output["terms_not_found"].append(term)
@@ -500,6 +502,7 @@ class AnnotationOntologyAPI:
         return output
     
     def add_feature_ontology_terms(self,feature,new_event,term_data,feature_hash,params,event_index,initial=True):
+        output = {"terms_not_found":[]}
         if not initial and params["propagate_annotations"] == 1:
             if "cdss" in feature:
                 for cds_id in feature["cdss"]:
@@ -536,7 +539,7 @@ class AnnotationOntologyAPI:
                                 self.ontologies_present[new_event["id"]] = {}
                             self.ontologies_present[new_event["id"]][subterm] = self.get_term_name(new_event["id"],subterm)                        
                             if self.ontologies_present[new_event["id"]][subterm] == "Unknown":
-                                terms_not_found[subterm] = 1
+                                output["terms_not_found"].append(subterm)
             if term["term"] == None:
                 continue
             if new_event["id"] not in self.ontologies_present:
@@ -555,7 +558,7 @@ class AnnotationOntologyAPI:
             else:
                 self.ontologies_present[new_event["id"]][term["term"]] = self.get_term_name(new_event["id"],term["term"])
                 if self.ontologies_present[new_event["id"]][term["term"]] == "Unknown":
-                    terms_not_found[term["term"]] = 1
+                    output["terms_not_found"].append(term["term"])
             if term["term"] not in feature["ontology_terms"][new_event["id"]]:
                 feature["ontology_terms"][new_event["id"]][term["term"]] = []
             feature["ontology_terms"][new_event["id"]][term["term"]].append(event_index)
@@ -565,6 +568,7 @@ class AnnotationOntologyAPI:
                 if term["term"] not in feature["ontology_evidence"]:
                     feature["ontology_evidence"][term["term"]] = {}
                 feature["ontology_evidence"][term["term"]][event_index] = term["evidence"]
+        return output
     
     def process_feature_aliases(self,ftr,alias_hash,lc_alias_hash):
         if "aliases" in ftr:
