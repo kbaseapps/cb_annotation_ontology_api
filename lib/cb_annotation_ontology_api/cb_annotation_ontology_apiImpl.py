@@ -3,11 +3,9 @@
 import logging
 import os
 import json
-from installed_clients.KBaseReportClient import KBaseReport
-from installed_clients.DataFileUtilClient import DataFileUtil
-from installed_clients.GenomeFileUtilClient import GenomeFileUtil
-from installed_clients.WorkspaceClient import Workspace as workspaceService
-from cb_annotation_ontology_api.annotation_ontology_api import AnnotationOntologyAPI
+import sys
+sys.path.append("/deps/KBBaseModules/")
+from cb_annotation_ontology_api.annotation_ontology_api import AnnotationOntologyModule
 #END_HEADER
 
 
@@ -26,9 +24,9 @@ class cb_annotation_ontology_api:
     # state. A method could easily clobber the state set by another while
     # the latter method is running.
     ######################################### noqa
-    VERSION = "0.0.1"
-    GIT_URL = ""
-    GIT_COMMIT_HASH = ""
+    VERSION = "1.0.0"
+    GIT_URL = "https://github.com/kbaseapps/cb_annotation_ontology_api.git"
+    GIT_COMMIT_HASH = "26202f93b10592c75a5aaca79d447a39f0af4923"
 
     #BEGIN_CLASS_HEADER
     #END_CLASS_HEADER
@@ -38,13 +36,10 @@ class cb_annotation_ontology_api:
     def __init__(self, config):
         #BEGIN_CONSTRUCTOR
         self.config = config
-        self.config["data_directory"] = "/kb/module/data/"
-        self.config['SDK_CALLBACK_URL'] = os.environ['SDK_CALLBACK_URL']
-        self.dfu_client = DataFileUtil(self.config['SDK_CALLBACK_URL'])
-        self.gfu_client = GenomeFileUtil(self.config['SDK_CALLBACK_URL'])
-        self.config['KB_AUTH_TOKEN'] = os.environ['KB_AUTH_TOKEN']
-        self.ws_client = workspaceService(config["workspace-url"])
-        self.shared_folder = config['scratch']
+        self.callback_url = os.environ['SDK_CALLBACK_URL']
+        self.token = os.environ['KB_AUTH_TOKEN']
+        config["version"] = self.VERSION
+        self.anno_api = AnnotationOntologyModule("cb_annotation_ontology_api",config,"/kb/module",None,self.token,callback=self.callback_url)
         logging.basicConfig(format='%(created)s %(levelname)s: %(message)s',
                             level=logging.INFO)
         #END_CONSTRUCTOR
@@ -68,14 +63,16 @@ class cb_annotation_ontology_api:
            parameter "feature_types" of mapping from String to String,
            parameter "ontology_terms" of mapping from String to list of type
            "AnnotationOntologyTerm" -> structure: parameter "term" of String,
-           parameter "modelseed_ids" of list of String, parameter "evidence"
-           of String
+           parameter "modelseed_ids" of list of String, parameter
+           "evidence_only" of Long, parameter "evidence" of type "Evidence"
+           -> structure: parameter "reference" of tuple of size 2: parameter
+           "entity_type" of String, parameter "ref_entity" of String,
+           parameter "scores" of mapping from String to Double
         """
         # ctx is the context object
         # return variables are: output
         #BEGIN get_annotation_ontology_events
-        anno_api = AnnotationOntologyAPI(self.config,self.ws_client,self.dfu_client)
-        output = anno_api.get_annotation_ontology_events(params)
+        output = self.anno_api.get_annotation_ontology_events(params)
         #END get_annotation_ontology_events
 
         # At some point might do deeper type checking...
@@ -101,17 +98,17 @@ class cb_annotation_ontology_api:
            String, parameter "ontology_terms" of mapping from String to list
            of type "AnnotationOntologyTerm" -> structure: parameter "term" of
            String, parameter "modelseed_ids" of list of String, parameter
-           "evidence" of String
+           "evidence_only" of Long, parameter "evidence" of type "Evidence"
+           -> structure: parameter "reference" of tuple of size 2: parameter
+           "entity_type" of String, parameter "ref_entity" of String,
+           parameter "scores" of mapping from String to Double
         :returns: instance of type "AddAnnotationOntologyEventsOutput" ->
            structure: parameter "output_ref" of String
         """
         # ctx is the context object
         # return variables are: output
         #BEGIN add_annotation_ontology_events
-        #with open(self.shared_folder+'/cb_'+params["output_name"]+".json", 'w') as outfile:
-        #    json.dump(params, outfile,indent=4)
-        anno_api = AnnotationOntologyAPI(self.config,self.ws_client,self.dfu_client,self.gfu_client)
-        output = anno_api.add_annotation_ontology_events(params)
+        output = self.anno_api.add_annotation_ontology_events(params)
         #END add_annotation_ontology_events
 
         # At some point might do deeper type checking...

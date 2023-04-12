@@ -3,10 +3,20 @@ A KBase module: cb_annotation_ontology_api
 */
 
 module cb_annotation_ontology_api {
-    typedef structure {
+	typedef structure {
+		/*Optional - ID of existing entity upon which a comparison is made or propagation is performed*/
+		/*Type specifies what type of entity this is (e.g. UNIPROTID,KBGENE,KO) while ref entity is the ID itself*/
+		tuple<string entity_type,string ref_entity> reference;
+		/*Required - specifies a set of typed scores assigned to the annotation*/
+		/*Allowed types include: probability,evalue,bits,identify,qalignstart,qalignstop,salignstart,salignstop,kmerhits,tmscore,rmsd,hmmscore*/
+		mapping<string type,float score> scores;
+    } Evidence;
+
+	typedef structure {
     	string term;
     	list<string> modelseed_ids;
-    	string evidence;
+		int evidence_only;/*Enables assignment of metadata to an existing annotation without adding a new annotation*/
+    	Evidence evidence;/*Supports adding an array of contextual information aboutthis annotation*/ 
     } AnnotationOntologyTerm;
     
     typedef structure {

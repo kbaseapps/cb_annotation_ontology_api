@@ -1,17 +1,25 @@
-import json
-import os
-import re
+from __future__ import absolute_import
 
-# silence whining
+import logging
+import os
+import sys
+import json
+import re
+import pandas as pd
+from kbbasemodules.basemodule import BaseModule
+from os.path import exists
 import requests
 import hashlib
+from operator import sub
 requests.packages.urllib3.disable_warnings()
+
+logger = logging.getLogger(__name__)
 
 source_hash = {
     "MetaCyc" : "META",
     "KEGG" : "RO",
     "BiGG" : "BIGG",
-    "rhea" : "RHEA"
+    "Rhea" : "RHEA"
 }
 
 ontology_translation = {
@@ -39,48 +47,38 @@ ontology_hash = {
     "RHEA" : 1
 };
 
-class AnnotationOntologyAPI:
-    def __init__(self,config,ws_client = None, dfu_client = None,gfu_client = None):
-        self.ws_client = ws_client
-        self.dfu_client = dfu_client
-        self.gfu_client = gfu_client
+class AnnotationOntologyModule(BaseModule):
+    def __init__(self,name,config,module_dir="/kb/module",working_dir=None,token=None,clients={},callback=None):
+        BaseModule.__init__(self,name,config,module_dir,working_dir,token,clients,callback)
+        self.object = None
+        self.objectinfo = None
+        self.type = None
+        self.ref = None
+        self.eventarray = []
+        self.ftrhash = {}
+        self.ftrtypes = {}
         self.alias_hash = {}
+        self.object_alias_hash = {}
         self.term_names = {}
-        self.config = config
-        self.ontologies_present = None
-    
-    def process_workspace_identifiers(self,id_or_ref, workspace=None):
-        """
-        IDs should always be processed through this function so we can interchangeably use
-        refs, IDs, and names for workspaces and objects
-        """
-        objspec = {}
-        if workspace is None or len(id_or_ref.split("/")) > 1:
-            objspec["ref"] = id_or_ref
-        else:
-            if isinstance(workspace, int):
-                objspec['wsid'] = workspace
-            else:
-                objspec['workspace'] = workspace
-            if isinstance(id_or_ref, int):
-                objspec['objid'] = id_or_ref
-            else:
-                objspec['name'] = id_or_ref
-                
-        #print("Object spec:")
-        #for key in objspec:
-        #    print(key+"\t"+objspec[key])
-        return objspec
+        self.ontologies_present = {} 
+        #Loading filtered reactions
+        self.filtered_rxn = {}
+        filename = self.module_dir + self.config["data"] + "/FilteredReactions.csv"
+        filtered_reaction_df = pd.read_csv(filename)
+        for index,row in filtered_reaction_df.iterrows():
+            self.filtered_rxn[row["id"]] = row["reason"]    
+        logging.basicConfig(format='%(created)s %(levelname)s: %(message)s',
+                            level=logging.INFO)
     
     def get_alias_hash(self,namespace):
         if "MSRXN" not in self.alias_hash:
-            filename = self.config["data_directory"]+"/msrxn_hash.json"
+            filename = self.module_dir + self.config["data"] + "/msrxn_hash.json"
             with open(filename) as json_file:
                 self.alias_hash["MSRXN"] = json.load(json_file)
         if namespace not in self.alias_hash:
             self.alias_hash[namespace] = {}
             if namespace == "EC":
-                filename = self.config["data_directory"]+"/EC_translation.tsv"
+                filename = self.module_dir + self.config["data"] + "/EC_translation.tsv"
                 data = ""
                 with open(filename, 'r') as file:
                     data = file.read()
@@ -96,7 +94,7 @@ class AnnotationOntologyAPI:
                             self.alias_hash["EC"]["EC:"+items[1]] = []
                         self.alias_hash["EC"]["EC:"+items[1]].append(modelseed)
             elif namespace == "META" or namespace == "RO" or namespace == "BIGG" or namespace == "RHEA":
-                filename = self.config["data_directory"]+"/ModelSEED_Reaction_Aliases.txt"
+                filename = self.module_dir + self.config["data"] + "/ModelSEED_Reaction_Aliases.txt"
                 data = ""
                 with open(filename, 'r') as file:
                     data = file.read()
@@ -117,7 +115,7 @@ class AnnotationOntologyAPI:
                                 self.alias_hash[source][source+":"+items[1]] = []
                             self.alias_hash[source][source+":"+items[1]].append(modelseed)
             elif namespace == "KO":
-                filename = self.config["data_directory"]+"/kegg_95_0_ko_seed.tsv"
+                filename = self.module_dir + self.config["data"] + "/kegg_95_0_ko_seed.tsv"
                 data = ""
                 with open(filename, 'r') as file:
                     data = file.read()
@@ -139,7 +137,7 @@ class AnnotationOntologyAPI:
                             id_hash[modelseed] = 1
             elif namespace == "SSO":
                 sso_template = dict()
-                filename = self.config["data_directory"]+"/SSO_reactions.json"
+                filename = self.module_dir + self.config["data"] + "/SSO_reactions.json"
                 with open(filename) as json_file:
                     sso_template = json.load(json_file)
                 for sso in sso_template:
@@ -155,7 +153,7 @@ class AnnotationOntologyAPI:
                         id_hash[modelseed] = 1             
             elif namespace == "GO":
                 go_translation = dict()
-                filename = self.config["data_directory"]+"/GO_ontology_translation.json"
+                filename = self.module_dir + self.config["data"] + "/GO_ontology_translation.json"
                 with open(filename) as json_file:
                     go_translation = json.load(json_file)
                 for term in go_translation["translation"]:
@@ -174,429 +172,343 @@ class AnnotationOntologyAPI:
                                 id_hash[modelseed] = 1            
         return self.alias_hash[namespace]
                 
-    def translate_term_to_modelseed(self,term):
+    def translate_term_to_modelseed(self,term,filter=False):
         namespace = term.split(":").pop(0)
+        output = []
         if namespace == "MSRXN":
             if term not in self.get_alias_hash(namespace):
-                return [term]
+                output = [term]
             else:
-                return self.get_alias_hash(namespace)[term]
+                output = self.get_alias_hash(namespace)[term]
         elif term not in self.get_alias_hash(namespace):
-            return []
+            output = []
         else:
-            return self.get_alias_hash(namespace)[term]
+            output = self.get_alias_hash(namespace)[term]
+        if filter:
+            new_output = []
+            for item in output:
+                if item not in self.filtered_rxn:
+                    new_output.append(item)
+            return new_output
+        return output
         
     def get_annotation_ontology_events(self,params):
-        #Building query hash
+        self.initialize_call("get_annotation_ontology_events",params,True)
+        self.validate_args(params,[],{
+            "propagate":True,
+            "query_events":None,
+            "query_genes":None,
+            "object":None,
+            "type":None,
+            "input_ref":None,
+            "input_workspace":None
+        })
+        self.process_object(params)
         event_query = None
-        if "query_events" in params and not params["query_events"] == None:
+        if params["query_events"]:
+            event_query = {}
             for event in params["query_events"]:
                 event_query[event] = 1
         gene_query = None
-        if "query_genes" in params and not params["query_genes"] == None:
+        if params["query_genes"]:
+            gene_query = {}
             for gene in params["query_genes"]:
                 gene_query[gene] = 1
-        #Pull the object from the workspace is necessary
-        if "object" not in params:
-            res = None
-            if "input_workspace" not in params:
-                res = self.ws_client.get_objects2({"objects": [self.process_workspace_identifiers(params["input_ref"], None)]})
-            else: 
-                res = self.ws_client.get_objects2({"objects": [self.process_workspace_identifiers(params["input_ref"], params["input_workspace"])]})
-            params["object"] = res["data"][0]["data"]
-            params["type"] = res["data"][0]["info"][2]
-        #Get the feature data
-        features = []
-        types = {}
-        if "features" in params["object"]:
-            features.extend(params["object"]["features"])
-            for ftr in params["object"]["features"]:
-                types[ftr["id"]] = "gene"
-        if "cdss" in params["object"]:
-            features.extend(params["object"]["cdss"])
-            for ftr in params["object"]["cdss"]:
-                types[ftr["id"]] = "cds"
-        if "mrnas" in params["object"]:
-            features.extend(params["object"]["mrnas"])
-            for ftr in params["object"]["mrnas"]:
-                types[ftr["id"]] = "mrna"
-        if "non_coding_features" in params["object"]:
-            features.extend(params["object"]["non_coding_features"])
-            for ftr in params["object"]["non_coding_features"]:
-                types[ftr["id"]] = "noncoding"
-        elif "features_handle_ref" in params["object"]:
-            shock_output = self.dfu_client.shock_to_file({
-                "handle_id" : params["object"]["features_handle_ref"],
-                "file_path" : self.config["scratch"]
-            })
-            os.system("gunzip --force ".shock_output["file_path"])
-            shock_output["file_path"] = shock_output["file_path"][0:-3]
-            with open(shock_output["file_path"]) as json_file:
-                features = json.load(json_file)
-            for ftr in features:
-                types[ftr["id"]] = "gene"
-        output = {"events" : [],"feature_types" : {}}
-        if "ontology_events" in params["object"]:
-            events_array = []
-            for event in params["object"]["ontology_events"]:
-                if "event_id" not in event:
-                    event["event_id"] = event["method"]+":"+event["method_version"]+":"+event["id"]+":"+event["timestamp"]
-                old_description = None
-                if "description" in event:
-                    old_description = event["description"]
-                    if event["description"][-1*len(event["timestamp"]):] != event["timestamp"]:
-                        event["description"] = event["description"]+":"+event["timestamp"]
-                else:
-                    event["description"] = event["method"]+":"+event["method_version"]+":"+event["id"]+":"+event["timestamp"]
-                newevent = {
-                    "event_id" : event["event_id"],
-                    "original_description" : old_description,
-                    "description" : event["description"],
-                    "ontology_id" : event["id"].upper(),
-                    "method" : event["method"],
-                    "method_version" : event["method_version"],
-                    "timestamp" : event["timestamp"],
-                    "ontology_terms" : {}
-                }
-                if newevent["ontology_id"] not in ontology_hash and newevent["ontology_id"] in ontology_translation:
-                    newevent["ontology_id"] = ontology_translation[newevent["ontology_id"]]
-                events_array.append(newevent)
-                if event_query == None or id in event_query:
-                    output["events"].append(newevent)
-            for feature in features:
-                if gene_query == None or feature["id"] in gene_query:
-                    if "ontology_terms" in feature:
-                        for tag in feature["ontology_terms"]:
-                            original_tag = tag
-                            tag = tag.upper()
-                            if tag not in ontology_hash and tag in ontology_translation:
-                                tag = ontology_translation[tag]
-                            if tag in ontology_hash:
-                                for term in feature["ontology_terms"][original_tag]:
-                                    original_term = term
-                                    array = term.split(":")
-                                    if len(array) == 1:
-                                        term = tag+":"+array[0]
-                                    else:
-                                        if array[0].upper() == original_tag.upper() or array[0].upper() == tag:
-                                            array[0] = tag
-                                            term = ":".join(array)
-                                        else:
-                                            term = tag+":"+":".join(array)
-                                    modelseed_ids = self.translate_term_to_modelseed(term)
-                                    termhash = {}
-                                    for event_index in feature["ontology_terms"][original_tag][original_term]:
-                                        if feature["id"] not in events_array[event_index]["ontology_terms"]:
-                                            output["feature_types"][feature["id"]] = types[feature["id"]]
-                                            events_array[event_index]["ontology_terms"][feature["id"]] = []
-                                        if term not in termhash:
-                                            termhash[term] = {}
-                                        termhash[term][event_index] = 1
-                                    for term in termhash:
-                                        for event_index in termhash[term]:
-                                            termdata = {"term" : term}
-                                            if len(modelseed_ids) > 0:
-                                                termdata["modelseed_ids"] = modelseed_ids
-                                            if "ontology_evidence" in feature:
-                                                if original_term in feature["ontology_evidence"]:
-                                                    if event_index in feature["ontology_evidence"][original_term]:
-                                                        termdata["evidence"] = feature["ontology_evidence"][original_term][event_index]
-                                            events_array[event_index]["ontology_terms"][feature["id"]].append(termdata)
-        with open('AliasHash.json', 'w') as outfile:
-            json.dump(self.alias_hash, outfile, indent=4)
+        output = {"events" : self.eventarray,"feature_types" : {}}
+        for id in self.ftrhash:
+            feature = self.ftrhash[id]
+            if gene_query == None or id in gene_query:
+                if "ontology_terms" in feature:
+                    output["feature_types"][id] = self.ftrtypes[id]
+                    self.integrate_terms_from_ftr(id,feature)
+                if "cdss" in feature:
+                    for cds in feature["cdss"]:
+                        subfeature = self.ftrhash[cds]
+                        if "ontology_terms" in subfeature:
+                            self.integrate_terms_from_ftr(id,subfeature)
+                if "parent_gene" in feature:
+                    subfeature = self.ftrhash[feature["parent_gene"]]
+                    if "ontology_terms" in subfeature:
+                        self.integrate_terms_from_ftr(id,subfeature)
         return output
     
     def add_annotation_ontology_events(self,params):
-        self.ontologies_present = {}
-        if "propagate_annotations" not in params:
-            params["propagate_annotations"] = 1  
-        #Pull the object from the workspace is necessary
-        if "provenance" not in params:
-            params["provenance"] = []
-        ref = None
-        if "object" not in params or params["object"] == None:
-            if "input_workspace" not in params:
-                res = self.ws_client.get_objects2({"objects": [self.process_workspace_identifiers(params["input_ref"], None)]})
-            else: 
-                res = self.ws_client.get_objects2({"objects": [self.process_workspace_identifiers(params["input_ref"], params["input_workspace"])]})
-            params["object"] = res["data"][0]["data"]
-            params["type"] = res["data"][0]["info"][2]
-            ref = str(res["data"][0]["info"][6])+"/"+str(res["data"][0]["info"][0])+"/"+str(res["data"][0]["info"][4])
+        self.initialize_call("add_annotation_ontology_events",params,True)
+        self.validate_args(params,["output_workspace","events"],{
+            "provenance":[],
+            "overwrite_matching":True,
+            "object":None,
+            "type":None,
+            "input_ref":None,
+            "input_workspace":None,
+            "output_name":None
+        })
+        self.process_object(params)
+        if not params["output_name"]:
+            if self.objectinfo:
+                params["output_name"] = self.objectinfo[1]
+            else:
+                params["output_name"] = self.object["id"]
+        if "clear_existing" in params and params["clear_existing"] == 1: 
+            self.eventarray = [] 
         output = {
             "ftrs_not_found" : [],"ftrs_found" : 0,"terms_not_found" : []
         }
-        #Pulling existing ontology so we can standardize and check for matches
-        events = self.get_annotation_ontology_events(params)["events"]
-        if "clear_existing" in params and params["clear_existing"] == 1: 
-            events = []
         #Scrolling through new events, stadardizing, and checking for matches
-        new_events = {}
+        new_events = []
         for event in params["events"]:
-            if "ontology_id" not in event:
-                event["ontology_id"] = event["id"]
-            event["ontology_id"] = event["ontology_id"].upper()
-            if event["ontology_id"] in ontology_translation:
-                event["ontology_id"] = ontology_translation[event["ontology_id"]]
-            event["id"] = event["ontology_id"]
-            new_events[event["id"]] = 1
-            #Creating description
-            if "event_id" not in event:
-                event["event_id"] = event["method"]+":"+event["ontology_id"]+":"+event["timestamp"]
-            if "description" not in event:
-                event["description"] = event["method"]+":"+event["method_version"]+":"+event["ontology_id"]+":"+event["timestamp"]
-            elif event["description"][-1*len(event["timestamp"]):] != event["timestamp"]:
-                event["description"] = event["description"]+":"+event["timestamp"]
-            index = 0
-            match = 0
-            for existing_event in events:
+            new_event = self.standardize_event(event)
+            new_events.append(new_event)
+            match = False
+            for i, existing_event in enumerate(self.eventarray):
                 #If an existing event has a matching event ID, we overwrite it
-                if existing_event["event_id"] == event["event_id"]:
-                    match = 1
-                    if "overwrite_matching" in params and params["overwrite_matching"] == 1:
-                        events[index] = event
-                index += 1
-            if match == 0:
-                events.append(event)
-        #Filling feature hash with all feature types which should all have unique ids
-        alias_hash = {}
-        feature_hash = {}
-        lc_feature_hash = {}
-        lc_alias_hash = {}
-        terms_not_found = {}
-        feature_found_hash = {}
-        feature_types = ["features","cdss","mrnas","non_coding_features"]
-        for currtype in feature_types:
-            if currtype in params["object"]:
-                to_remove = []
-                for ftr in params["object"][currtype]: 
-                    ftr["ontology_terms"] = {}
-                    if currtype == "features" and "protein_translation" not in ftr:
-                        if "non_coding_features" not in params["object"]:
-                            params["object"]["non_coding_features"] = []
-                        params["object"]["non_coding_features"].append(ftr)
-                        to_remove.append(ftr)
-                    else:
-                        self.upgrade_feature(ftr,currtype)
-                        feature_hash[ftr["id"]] = ftr
-                        lc_feature_hash[ftr["id"].lower()] = ftr
-                        self.process_feature_aliases(ftr,alias_hash,lc_alias_hash)
-                for item in to_remove:
-                    params["object"][currtype].remove(item)
-        if "features_handle_ref" in params["object"]:
-            if "feature_object" not in params:
-                shock_output = self.dfu_client.shock_to_file({
-                    "handle_id" : params["object"]["features_handle_ref"],
-                    "file_path" : self.config["scratch"]
-                })
-                os.system("gunzip --force ".shock_output["file_path"])
-                shock_output["file_path"] = shock_output["file_path"][0:-3]
-                with open(shock_output["file_path"]) as json_file:
-                    params["feature_object"] = json.load(json_file)
-        if "feature_object" in params:
-            for ftr in params["feature_object"]:
-                feature_hash[ftr["id"]] = ftr
-                lc_feature_hash[ftr["id"].lower()] = ftr
-                self.process_feature_aliases(ftr,alias_hash,lc_alias_hash)
+                if existing_event["event_id"] == new_event["event_id"]:
+                    match = True
+                    if params["overwrite_matching"]:
+                        self.eventarray[i] = new_event
+            if not match:
+                self.eventarray.append(new_event)
         #Adding events
-        params["object"]["ontology_events"] = []
-        for event in events:
-            new_event = {
-                "description" : event["description"],
-                "id" : event["ontology_id"],
-                "event_id" : event["event_id"],
-                "ontology_id" : event["ontology_id"],
-                "method" : event["method"],
-                "method_version" : event["method_version"],
-                "timestamp" : event["timestamp"]
-            }
-            if "ontology_events" not in params["object"]:
-                params["object"]["ontology_events"] = []
-            event_index = len(params["object"]["ontology_events"])
-            params["object"]["ontology_events"].append(new_event)
+        feature_found_hash = {}
+        terms_not_found = {}
+        for event in new_events:
             for currgene in event["ontology_terms"]:
                 genes = []
-                if currgene in feature_hash:
-                    if new_event["id"] in new_events:
-                        feature_found_hash[currgene] = 1
-                    genes = [currgene]
-                elif currgene in alias_hash:
-                    if new_event["id"] in new_events:
-                        feature_found_hash[currgene] = 1
-                    genes = alias_hash[currgene]
-                elif currgene.lower() in lc_feature_hash:
-                    if new_event["id"] in new_events:
-                        feature_found_hash[currgene] = 1
-                    genes = [lc_feature_hash[currgene.lower()]["id"]]
-                elif currgene.lower() in lc_alias_hash:
-                    if new_event["id"] in new_events:
-                        feature_found_hash[currgene] = 1
-                    genes = lc_alias_hash[currgene.lower()]
+                if currgene in self.ftrhash:
+                    feature_found_hash[currgene] = 1
+                    genes = [self.ftrhash[currgene]["id"]]
+                elif currgene in self.object_alias_hash:
+                    feature_found_hash[currgene] = 1
+                    genes = self.object_alias_hash[currgene]
                 else:
                     output["ftrs_not_found"].append(currgene)
                 for gene in genes:
-                    if gene in feature_hash:
-                        feature = feature_hash[gene]
-                        add_ftr_output = self.add_feature_ontology_terms(feature,new_event,event["ontology_terms"][currgene],feature_hash,params,event_index,True)
+                    if gene in self.ftrhash:
+                        feature = self.ftrhash[gene]
+                        add_ftr_output = self.add_feature_ontology_terms(feature,event,currgene)
                         for term in add_ftr_output["terms_not_found"]:
                             terms_not_found[term] = 1
         output["ftrs_found"] = len(feature_found_hash)
         for term in terms_not_found:
             output["terms_not_found"].append(term)
-        params["object"]["ontologies_present"] = self.ontologies_present
         #Saving object if requested but not if it's an AMA
         if params["save"] == 1:
-            #Setting provenance
-            provenance_params = {}
-            for key in params:
-                if not key == "object" and not key == "events" and not "feature_object":
-                    provenance_params[key] = params[key]            
-            provenance = [{
-                'description': 'A function that adds ontology terms to a genome or metagenome',
-                'input_ws_objects': [],
-                'method': 'add_annotation_ontology_events',
-                'method_params': [provenance_params],
-                'service': 'annotation_ontology_api',
-                'service_ver': 1,
-            }]
-            #If a metagenome, saving features
-            params["type"] = "KBaseGenomes.Genome"
-            if "feature_object" in params:
-                params["type"] = "KBaseMetagenomes.AnnotatedMetagenomeAssembly"
-                json_file_path = self.config["scratch"]+params["object"]["name"]+"_features.json"
-                with open(json_file_path, 'w') as fid:
-                    json.dump(params["feature_object"], fid)
-                json_to_shock = self.dfu_client.file_to_shock(
-                    {'file_path': json_file_path, 'make_handle': 1, 'pack': 'gzip'}
-                )
-                # Resetting feature file handle o new value
-                params["object"]['features_handle_ref'] = json_to_shock['handle']['hid']
-                # Remove json file to avoid disk overload
-                os.remove(json_file_path)
-            # Removing genbank handle ref because this breaks saving
-            params["object"].pop('genbank_handle_ref', None)
-            #Adding missing fields in genome
-            if params["type"] == "KBaseGenomes.Genome":
-                self.check_genome(params["object"],ref)
-            # Saving genome/metagenome object to workspace
-            gfu_param = {
-                "name" : params["output_name"],
-                "data" : params["object"],
-                "upgrade" : 1,
-                "provenance" : params["provenance"],
-                "hidden" : 0
-            }
-            if isinstance(params["output_workspace"], int):
-                info = self.ws_client.get_workspace_info({"id":params["output_workspace"]});
-                gfu_param['workspace'] = info[1]
-            else:
-                gfu_param['workspace'] = params["output_workspace"]
-            save_output = self.gfu_client.save_one_genome(gfu_param);
-            output["output_ref"] = str(save_output["info"][6])+"/"+str(save_output["info"][0])+"/"+str(save_output["info"][4])
-            output["output_name"] = str(save_output["info"][1])
+            save_output = self.save_object(params)
+            for key in save_output:
+                output[key] = save_output[key]
         else:            
             #Returning object if save not requested
-            output["object"] = params["object"]
-            output["type"] = params["type"]
+            output["object"] = self.object
+            output["type"] = self.type
             if "feature_object" in params:
                 output["feature_object"] = params["feature_object"]
         return output
     
-    def add_feature_ontology_terms(self,feature,new_event,term_data,feature_hash,params,event_index,initial=True):
-        output = {"terms_not_found":[]}
-        if not initial and params["propagate_annotations"] == 1:
-            if "cdss" in feature:
-                for cds_id in feature["cdss"]:
-                    if cds_id in feature_hash:
-                        self.add_feature_ontology_terms(feature_hash[cds_id],new_event,term_data,feature_hash,params,event_index,False)
-            if "parent_gene" in feature:
-                if feature["parent_gene"] in feature_hash:
-                    self.add_feature_ontology_terms(feature_hash[feature["parent_gene"]],new_event,term_data,feature_hash,params,event_index,False)
-        if "ontology_terms" not in feature:
-            feature["ontology_terms"] = {}
-        if new_event["id"] not in feature["ontology_terms"]:
-            feature["ontology_terms"][new_event["id"]] = {}
-        for term in term_data:
-            if term["term"].split(":")[0] != new_event["id"]:
-                term["term"] = new_event["id"]+":"+term["term"]
-            #If this is a SEED role, translate to an SSO
-            if new_event["id"] == "SSO" and re.search('^SSO:\d+$', term["term"]) == None:
-                term["term"] = re.sub("^SSO:","",term["term"])
-                terms = re.split("\s*;\s+|\s+[\@\/]\s+",term["term"])
-                first = 1
-                for subterm in terms:
-                    if first == 1:
-                        #Only the first term completes the rest of this code
-                        term["term"] = self.translate_rast_function_to_sso(subterm)
-                        first = 0
-                    else:
-                        #Sub sterms need to be added independently
-                        subterm = self.translate_rast_function_to_sso(subterm)
-                        if subterm != None:
-                            if subterm not in feature["ontology_terms"][new_event["id"]]:
-                                feature["ontology_terms"][new_event["id"]][subterm] = []
-                            feature["ontology_terms"][new_event["id"]][subterm].append(event_index)
-                            if new_event["id"] not in self.ontologies_present:
-                                self.ontologies_present[new_event["id"]] = {}
-                            self.ontologies_present[new_event["id"]][subterm] = self.get_term_name(new_event["id"],subterm)                        
-                            if self.ontologies_present[new_event["id"]][subterm] == "Unknown":
-                                output["terms_not_found"].append(subterm)
-            if term["term"] == None:
-                continue
-            if new_event["id"] not in self.ontologies_present:
-                self.ontologies_present[new_event["id"]] = {}
-            #Dealing with custom names when specified for a term
-            if "name" in term or "suffix" in term:
-                if "suffix" in term:
-                    term["name"] = self.get_term_name(new_event["id"],term["term"])+term["suffix"]
-                #If a custom name is specified, for now, we need to make sure the term is unique or the name will be overwritten
-                if term["term"] in self.ontologies_present[new_event["id"]] and self.ontologies_present[new_event["id"]][term["term"]] != term["name"]:
-                    index = 1
-                    while term["term"]+";"+str(index) in self.ontologies_present[new_event["id"]] and self.ontologies_present[new_event["id"]][term["term"]+";"+str(index)] != term["name"]:
-                        index += 1
-                    term["term"] = term["term"]+";"+str(index)
-                self.ontologies_present[new_event["id"]][term["term"]] = term["name"]
+    def process_object(self,params):
+        if "object" in params and params["object"]:
+            self.object = params["object"]
+            self.type = params["type"]
+        else:
+            res = None
+            if "input_workspace" not in params:
+                res = self.ws_client().get_objects2({"objects": [self.process_ws_ids(params["input_ref"], None)]})
+            else: 
+                res = self.ws_client().get_objects2({"objects": [self.process_ws_ids(params["input_ref"], params["input_workspace"])]})
+            self.object = res["data"][0]["data"]
+            self.objectinfo = res["data"][0]["info"]
+            self.type = res["data"][0]["info"][2]
+            self.ref = str(res["data"][0]["info"][6])+"/"+str(res["data"][0]["info"][0])+"/"+str(res["data"][0]["info"][4])
+        self.eventarray = []
+        self.ontologies_present = {}
+        if "ontology_events" in self.object:
+            for event in self.object["ontology_events"]:
+                newevent = self.standardize_event(event)
+                self.eventarray.append(newevent)
+        self.ftrhash = {}
+        self.ftrtypes = {}
+        self.object_alias_hash = {}
+        if "features" in self.object:
+            to_remove = []
+            for ftr in self.object["features"]:
+                if "protein_translation" not in ftr:
+                    if "non_coding_features" not in self.object:
+                        self.object["non_coding_features"] = []
+                    self.object["non_coding_features"].append(ftr)
+                    to_remove.append(ftr)
+                else:
+                    self.ftrhash[ftr["id"]] = ftr
+                    self.ftrtypes[ftr["id"]] = "gene"
+            for item in to_remove:
+                self.object["features"].remove(item)
+        if "cdss" in self.object:
+            for ftr in self.object["cdss"]:
+                self.ftrhash[ftr["id"]] = ftr
+                self.ftrtypes[ftr["id"]] = "cds"
+        if "mrnas" in self.object:
+            for ftr in self.object["mrnas"]:
+                self.ftrhash[ftr["id"]] = ftr
+                self.ftrtypes[ftr["id"]] = "mrna"
+        if "non_coding_features" in self.object:
+            for ftr in self.object["non_coding_features"]:
+                self.ftrhash[ftr["id"]] = ftr
+                self.ftrtypes[ftr["id"]] = "noncoding"
+        if "features_handle_ref" in self.object:
+            if "feature_object" not in params:
+                shock_output = self.dfu_client().shock_to_file({
+                    "handle_id" : self.object["features_handle_ref"],
+                    "file_path" : self.config["scratch"]
+                })
+                os.system("gunzip --force ".shock_output["file_path"])
+                shock_output["file_path"] = shock_output["file_path"][0:-3]
+                with open(shock_output["file_path"]) as json_file:
+                    features = json.load(json_file)
             else:
-                self.ontologies_present[new_event["id"]][term["term"]] = self.get_term_name(new_event["id"],term["term"])
-                if self.ontologies_present[new_event["id"]][term["term"]] == "Unknown":
-                    output["terms_not_found"].append(term["term"])
-            if term["term"] not in feature["ontology_terms"][new_event["id"]]:
-                feature["ontology_terms"][new_event["id"]][term["term"]] = []
-            feature["ontology_terms"][new_event["id"]][term["term"]].append(event_index)
-            if "evidence" in term:
-                if "ontology_evidence" not in feature:
-                    feature["ontology_evidence"] = {}
-                if term["term"] not in feature["ontology_evidence"]:
-                    feature["ontology_evidence"][term["term"]] = {}
-                feature["ontology_evidence"][term["term"]][event_index] = term["evidence"]
+                features = params["feature_object"]
+            for ftr in features:
+                self.ftrhash[ftr["id"]] = ftr
+                self.ftrtypes[ftr["id"]] = "gene"
+        for ftrid in self.ftrhash:
+            ftr = self.ftrhash[ftrid]
+            if "ontology_terms" not in ftr:
+                ftr["ontology_terms"] = {}
+            self.upgrade_feature(ftr)
+            self.process_feature_aliases(ftr)            
+
+    def save_object(self,params):
+        #Setting provenance
+        provenance_params = {}
+        for key in params:
+            if not key == "object" and not key == "events" and not "feature_object":
+                provenance_params[key] = params[key]            
+        provenance = [{
+            'description': 'A function that adds ontology terms to a genome or metagenome',
+            'input_ws_objects': [],
+            'method': 'add_annotation_ontology_events',
+            'method_params': [provenance_params],
+            'service': 'annotation_ontology_api',
+            'service_ver': 1,
+        }]
+        #If a metagenome, saving features
+        if "feature_object" in params:
+            self.type = "KBaseMetagenomes.AnnotatedMetagenomeAssembly"
+            json_file_path = self.config["scratch"]+self.object["name"]+"_features.json"
+            with open(json_file_path, 'w') as fid:
+                json.dump(params["feature_object"], fid)
+            json_to_shock = self.dfu_client().file_to_shock(
+                {'file_path': json_file_path, 'make_handle': 1, 'pack': 'gzip'}
+            )
+            # Resetting feature file handle o new value
+            self.object['features_handle_ref'] = json_to_shock['handle']['hid']
+            # Remove json file to avoid disk overload
+            os.remove(json_file_path)
+        # Removing genbank handle ref because this breaks saving
+        self.object.pop('genbank_handle_ref', None)
+        # Setting ontology and eventarray in object
+        self.object["ontologies_present"] = self.ontologies_present
+        self.object["ontology_events"] = self.eventarray
+        for event in self.object["ontology_events"]:
+            if "ontology_terms" in event:
+                event.pop("ontology_terms")
+        #Adding missing fields in genome
+        if self.type == "KBaseGenomes.Genome":
+            self.check_genome(self.object,ref)
+        # Saving genome/metagenome object to workspace
+        gfu_param = {
+            "name" : params["output_name"],
+            "data" : self.object,
+            "upgrade" : 1,
+            "provenance" : params["provenance"],
+            "hidden" : 0
+        }
+        if isinstance(params["output_workspace"], int):
+            info = self.ws_client().get_workspace_info({"id":params["output_workspace"]});
+            gfu_param['workspace'] = info[1]
+        else:
+            gfu_param['workspace'] = params["output_workspace"]
+        save_output = self.gfu_client().save_one_genome(gfu_param);
+        output = {}
+        output["output_ref"] = str(save_output["info"][6])+"/"+str(save_output["info"][0])+"/"+str(save_output["info"][4])
+        output["output_name"] = str(save_output["info"][1])
         return output
+
+    #Function to standardize ontology tags
+    def clean_tag(self,original_tag):
+        tag = original_tag.upper()
+        if tag not in ontology_hash and tag in ontology_translation:
+            tag = ontology_translation[tag]
+        return tag    
     
-    def process_feature_aliases(self,ftr,alias_hash,lc_alias_hash):
+    def clean_term(self,original_term,original_tag,tag):
+        term = original_term
+        array = term.split(":")
+        if len(array) == 1:
+            term = tag+":"+array[0]
+        else:
+            if array[0].upper() == original_tag.upper() or array[0].upper() == tag:
+                array[0] = tag
+                term = ":".join(array)
+            else:
+                term = tag+":"+":".join(array)
+        return term
+    
+    def standardize_event(self,event):
+        if "id" not in event and "ontology_id" in event:
+            event["id"] = event["ontology_id"]
+        if "event_id" not in event:
+            event["event_id"] = event["method"]+":"+event["method_version"]+":"+event["id"]+":"+event["timestamp"]
+        old_description = None
+        if "description" in event:
+            old_description = event["description"]
+            if event["description"][-1*len(event["timestamp"]):] != event["timestamp"]:
+                event["description"] = event["description"]+":"+event["timestamp"]
+        else:
+            event["description"] = event["method"]+":"+event["method_version"]+":"+event["id"]+":"+event["timestamp"]
+        if "ontology_id" not in event:
+            event["ontology_id"] = event["id"]
+        standard_event = {
+            "id": self.clean_tag(event["ontology_id"]),
+            "event_id" : event["event_id"],
+            "original_description" : old_description,
+            "description" : event["description"],
+            "ontology_id" : self.clean_tag(event["ontology_id"]),
+            "method" : event["method"],
+            "method_version" : event["method_version"],
+            "timestamp" : event["timestamp"],
+        }
+        if "ontology_terms" in event:
+            standard_event["ontology_terms"] = event["ontology_terms"]
+        return standard_event
+
+    def process_feature_aliases(self,ftr):
         if "aliases" in ftr:
             for alias in ftr["aliases"]:    
                 if not isinstance(alias, str):
                     alias = alias[1]
-                if alias not in alias_hash:
-                    alias_hash[alias] = []
-                alias_hash[alias].append(ftr["id"])
-                if alias.lower() not in lc_alias_hash:
-                    lc_alias_hash[alias.lower()] = []
-                lc_alias_hash[alias.lower()].append(ftr["id"])
+                if alias not in self.object_alias_hash:
+                    self.object_alias_hash[alias] = []
+                self.object_alias_hash[alias].append(ftr["id"])
+                if alias.lower() not in self.object_alias_hash:
+                    self.object_alias_hash[alias.lower()] = []
+                if ftr["id"] not in self.object_alias_hash[alias.lower()]:
+                    self.object_alias_hash[alias.lower()].append(ftr["id"])
         if "db_xrefs" in ftr:
             for alias in ftr["db_xrefs"]:
-                if alias[1] not in alias_hash:
-                    alias_hash[alias[1]] = []
-                alias_hash[alias[1]].append(ftr["id"])
+                if alias[1] not in self.object_alias_hash:
+                    self.object_alias_hash[alias[1]] = []
+                self.object_alias_hash[alias[1]].append(ftr["id"])
                 if alias[1].lower() not in lc_alias_hash:
-                    lc_alias_hash[alias[1].lower()] = []
-                lc_alias_hash[alias[1].lower()].append(ftr["id"])
+                    self.object_alias_hash[alias[1].lower()] = []
+                if ftr["id"] not in self.object_alias_hash[alias[1].lower()]:
+                    self.object_alias_hash[alias[1].lower()].append(ftr["id"])
     
-    def upgrade_feature(self,ftr,type):
+    def upgrade_feature(self,ftr):
+        type = self.ftrtypes[ftr["id"]]
         if "function" in ftr:
             ftr["functions"] = re.split("\s*;\s+|\s+[\@\/]\s+",ftr["function"])
             del ftr["function"]
             #Clearing old ontology terms rather than attempting to translate them
             ftr["ontology_terms"] = {}
-        if type == "features" and "cdss" not in ftr:
+        if type == "gene" and "cdss" not in ftr:
             ftr["cdss"] = []
         if "dna_sequence_length" not in ftr:
             ftr["dna_sequence_length"] = ftr["location"][0][3]
@@ -617,6 +529,105 @@ class AnnotationOntologyAPI:
                 ftr["md5"] = hashlib.md5(ftr["protein_translation"].encode()).hexdigest()
             else:
                 ftr["md5"] = ""
+
+    def integrate_terms_from_ftr(self,id,feature):
+        annotation = False
+        if "ontology_terms" in feature:
+            for original_tag in feature["ontology_terms"]:
+                for original_term in feature["ontology_terms"][original_tag]:
+                    tag = self.clean_tag(original_tag)
+                    term = self.clean_term(original_term,original_tag,tag)
+                    modelseed_ids = self.translate_term_to_modelseed(term)
+                    for event_index in feature["ontology_terms"][original_tag][original_term]:
+                        if event_index < len(self.eventarray):
+                            if "ontology_terms" not in self.eventarray[event_index]:
+                                self.eventarray[event_index]["ontology_terms"] = {}
+                            if id not in self.eventarray[event_index]["ontology_terms"]:
+                                self.eventarray[event_index]["ontology_terms"][id] = []
+                            termdata = {"term" : term}
+                            if id != feature["id"]:
+                                termdata["indirect"] = True
+                            if len(modelseed_ids) > 0:
+                                termdata["modelseed_ids"] = modelseed_ids
+                            if "ontology_evidence" in feature:
+                                if term in feature["ontology_evidence"]:
+                                    if str(event_index) in feature["ontology_evidence"][original_term]:
+                                        termdata["evidence"] = feature["ontology_evidence"][original_term][str(event_index)]
+                            found = False
+                            for outterm in self.eventarray[event_index]["ontology_terms"][id]:
+                                if outterm["term"] == term:
+                                    found = True
+                            if not found:
+                                self.eventarray[event_index]["ontology_terms"][id].append(termdata)
+                                annotation = True    
+        return annotation
+    
+    def add_feature_ontology_terms(self,feature,event,ftrid):
+        term_data = event["ontology_terms"][ftrid]
+        event_index = None
+        for i, item in enumerate(self.eventarray):
+            if item == event:
+                event_index = i
+        output = {"terms_not_found":[]}
+        if "ontology_terms" not in feature:
+            feature["ontology_terms"] = {}
+        if event["ontology_id"] not in feature["ontology_terms"]:
+            feature["ontology_terms"][event["ontology_id"]] = {}
+        for term in term_data:
+            if "indirect" not in term or not term["indirect"]:#Don't add terms for proteins that might be present because of CDS annotations
+                if term["term"].split(":")[0] != event["ontology_id"]:
+                    term["term"] = event["ontology_id"]+":"+term["term"]
+                #If this is a SEED role, translate to an SSO
+                if event["ontology_id"] == "SSO" and re.search('^SSO:\d+$', term["term"]) == None:
+                    term["term"] = re.sub("^SSO:","",term["term"])
+                    terms = re.split("\s*;\s+|\s+[\@\/]\s+",term["term"])
+                    first = 1
+                    for subterm in terms:
+                        if first == 1:
+                            #Only the first term completes the rest of this code
+                            term["term"] = self.translate_rast_function_to_sso(subterm)
+                            first = 0
+                        else:
+                            #Subterms need to be added independently
+                            subterm = self.translate_rast_function_to_sso(subterm)
+                            if subterm != None:
+                                if subterm not in feature["ontology_terms"][event["ontology_id"]]:
+                                    feature["ontology_terms"][event["ontology_id"]][subterm] = []
+                                feature["ontology_terms"][event["ontology_id"]][subterm].append(event_index)
+                                if event["ontology_id"] not in self.ontologies_present:
+                                    self.ontologies_present[event["ontology_id"]] = {}
+                                self.ontologies_present[event["ontology_id"]][subterm] = self.get_term_name(event["ontology_id"],subterm)                        
+                                if self.ontologies_present[event["ontology_id"]][subterm] == "Unknown":
+                                    output["terms_not_found"].append(subterm)
+                if term["term"] == None:
+                    continue
+                if event["ontology_id"] not in self.ontologies_present:
+                    self.ontologies_present[event["ontology_id"]] = {}
+                #Dealing with custom names when specified for a term
+                if "name" in term or "suffix" in term:
+                    if "suffix" in term:
+                        term["name"] = self.get_term_name(event["ontology_id"],term["term"])+term["suffix"]
+                    #If a custom name is specified, for now, we need to make sure the term is unique or the name will be overwritten
+                    if term["term"] in self.ontologies_present[event["ontology_id"]] and self.ontologies_present[event["ontology_id"]][term["term"]] != term["name"]:
+                        index = 1
+                        while term["term"]+";"+str(index) in self.ontologies_present[event["ontology_id"]] and self.ontologies_present[event["ontology_id"]][term["term"]+";"+str(index)] != term["name"]:
+                            index += 1
+                        term["term"] = term["term"]+";"+str(index)
+                    self.ontologies_present[event["ontology_id"]][term["term"]] = term["name"]
+                else:
+                    self.ontologies_present[event["ontology_id"]][term["term"]] = self.get_term_name(event["ontology_id"],term["term"])
+                    if self.ontologies_present[event["ontology_id"]][term["term"]] == "Unknown":
+                        output["terms_not_found"].append(term["term"])
+                if term["term"] not in feature["ontology_terms"][event["ontology_id"]]:
+                    feature["ontology_terms"][event["ontology_id"]][term["term"]] = []
+                feature["ontology_terms"][event["ontology_id"]][term["term"]].append(event_index)
+                if "evidence" in term:
+                    if "ontology_evidence" not in feature:
+                        feature["ontology_evidence"] = {}
+                    if term["term"] not in feature["ontology_evidence"]:
+                        feature["ontology_evidence"][term["term"]] = {}
+                    feature["ontology_evidence"][term["term"]][str(event_index)] = term["evidence"]
+        return output
         
     def check_genome(self,genome,ref = None):
         if "gc_content" in genome and isinstance(genome["gc_content"],str):
@@ -649,23 +660,23 @@ class AnnotationOntologyAPI:
         term = re.sub("[\(\)\[\],-]","",term)
         return term
     
-    def translate_rast_function_to_sso(self,term):
+    def translate_rast_function_to_sso(self,input_term):
         #Stripping out SSO prefix if it's present
-        term = re.sub("^SSO:","",term)
-        term = self.convert_role_to_searchrole(term)
+        input_term = re.sub("^SSO:","",input_term)
+        input_term = self.convert_role_to_searchrole(input_term)
         #Checking for SSO translation file
         if "SEED_ROLE" not in self.alias_hash:
             self.alias_hash["SEED_ROLE"] = {}
             sso_ontology = dict()
-            with open(self.config["data_directory"]+"/SSO_dictionary.json") as json_file:
+            with open(self.module_dir + self.config["data"] + "/SSO_dictionary.json") as json_file:
                 sso_ontology = json.load(json_file)
             for term in sso_ontology["term_hash"]:
                 name = self.convert_role_to_searchrole(sso_ontology["term_hash"][term]["name"])
                 self.alias_hash["SEED_ROLE"][name] = term
             
         #Translating
-        if term in self.alias_hash["SEED_ROLE"]:
-            return self.alias_hash["SEED_ROLE"][term]
+        if input_term in self.alias_hash["SEED_ROLE"]:
+            return self.alias_hash["SEED_ROLE"][input_term]
         else:
             return None
     
@@ -673,7 +684,7 @@ class AnnotationOntologyAPI:
         if type not in self.term_names:
             self.term_names[type] = {}
             if type == "SSO" or type == "EC" or type == "TC" or type == "META" or type == "RO" or type == "KO" or type == "GO":
-                with open(self.config["data_directory"]+"/"+type+"_dictionary.json") as json_file:
+                with open(self.module_dir + self.config["data"] + "/"+type+"_dictionary.json") as json_file:
                     ontology = json.load(json_file)
                     for term in ontology["term_hash"]:
                         self.term_names[type][term] = ontology["term_hash"][term]["name"]

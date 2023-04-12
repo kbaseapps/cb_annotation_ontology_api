@@ -55,46 +55,103 @@ class cb_annotation_ontology_apiTest(unittest.TestCase):
 
     # NOTE: According to Python unittest naming rules test method names should start from 'test'. # noqa
     def test_your_method(self):
-        # Prepare test objects in workspace if needed using
-        # self.getWsClient().save_objects({'workspace': self.getWsName(),
-        #                                  'objects': []})
-        #
         # Run your method by
-        # ret = self.getImpl().your_method(self.getContext(), parameters...)
-        #
-        # Check returned data with
-        # self.assertEqual(ret[...], ...) or other unittest methods
-        f = open('/kb/module/test/debug.json')
-        testparams = json.load(f)
-        self.serviceImpl.add_annotation_ontology_events(self.ctx,testparams)
+        #f = open('/kb/module/test/debug.json')
+        #testparams = json.load(f)
+        #self.serviceImpl.add_annotation_ontology_events(self.ctx,testparams)
         
         output = self.serviceImpl.add_annotation_ontology_events(self.ctx,{
             "input_ref" : "Escherichia_coli_K-12_MG1655",
             "input_workspace" : 68056,
-            "output_name" : "TestOutput",
-            "events" : [{
-                #"event_id": "RAST-annotate_genome:SSO:2022-05-11T07:19:52",
-                #"original_description": "RAST annotation:2022-05-11T07:19:52",
-                "description": "Test",
-                "ontology_id": "EC",
-                "method": "add_annotation_ontology_events",
-                "method_version": "0.0.9",
-                "timestamp": "2022-05-11T07:19:52",
-                "ontology_terms": {
-                    "A0A031WDE4_gene": [
-                      {
-                        "term": "EC:4.2.1.172",
-                        "modelseed_ids": [
-                          "MSRXN:rxn42623"
+            "output_name" : "cb_annotation_ontolgoy_api_Output",
+            "events" : [
+                {
+                    "description": "Test1",
+                    "ontology_id": "EC",
+                    "method": "add_annotation_ontology_events",
+                    "method_version": "0.0.9",
+                    "timestamp": "2022-05-11T07:19:52",
+                    "ontology_terms": {
+                        "b0001": [
+                          {
+                            "term": "4.2.1.172",
+                            "evidence": {
+                                "scores": {"probability":0.78}
+                            }
+                          }
                         ]
-                      }
-                    ]
+                    }
+                },{
+                    "description": "Test2",
+                    "ontology_id": "RHEA",
+                    "method": "add_annotation_ontology_events",
+                    "method_version": "0.0.9",
+                    "timestamp": "2022-05-11T07:19:52",
+                    "ontology_terms": {
+                        "b0001": [
+                          {
+                            "term": "22748",
+                            "evidence": {
+                                "scores": {"probability":0.78}
+                            }
+                          }
+                        ]
+                    }
+                },{
+                    "description": "Test3",
+                    "ontology_id": "RO",
+                    "method": "add_annotation_ontology_events",
+                    "method_version": "0.0.9",
+                    "timestamp": "2022-05-11T07:19:52",
+                    "ontology_terms": {
+                        "b0002": [
+                          {
+                            "term": "R00008",
+                            "evidence": {
+                                "scores": {"probability":0.78}
+                            }
+                          }
+                        ]
+                    }
+                },{
+                    "description": "Test3",
+                    "ontology_id": "META",
+                    "method": "add_annotation_ontology_events",
+                    "method_version": "0.0.9",
+                    "timestamp": "2022-05-11T07:19:52",
+                    "ontology_terms": {
+                        "b0003": [
+                          {
+                            "term": "RXN-1781",
+                            "evidence": {
+                                "scores": {"evalue":1e-5,"identity":0.50}
+                            }
+                          }
+                        ]
+                    }
+                },{
+                    "description": "Test4",
+                    "ontology_id": "SSO",
+                    "method": "add_annotation_ontology_events",
+                    "method_version": "0.0.9",
+                    "timestamp": "2022-05-11T07:19:52",
+                    "ontology_terms": {
+                        "b0004": [
+                          {
+                            "term": "(2R)-sulfolactate sulfo-lyase subunit alpha (EC 4.4.1.24)",
+                            "evidence": {
+                                "scores": {"kmerhits":5}
+                            }
+                          }
+                        ]
+                    }
                 }
-            }],
+            ],
             "output_workspace": 68056,
             "save" : 1
         })
         output = self.serviceImpl.get_annotation_ontology_events(self.ctx,{
-            "input_ref" : "TestOutput",
+            "input_ref" : "cb_annotation_ontolgoy_api_Output",
             "input_workspace" : 68056
         })
+        
