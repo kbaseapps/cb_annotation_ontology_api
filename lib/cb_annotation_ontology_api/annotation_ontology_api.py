@@ -411,7 +411,7 @@ class AnnotationOntologyModule(BaseModule):
                 event.pop("ontology_terms")
         #Adding missing fields in genome
         if self.type == "KBaseGenomes.Genome":
-            self.check_genome(self.object,ref)
+            self.check_genome(self.object,self.ref)
         # Saving genome/metagenome object to workspace
         gfu_param = {
             "name" : params["output_name"],
