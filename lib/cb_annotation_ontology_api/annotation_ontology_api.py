@@ -32,6 +32,7 @@ ontology_translation = {
 }
 
 ontology_hash = {
+    "antiSMASH-CV" : 1,
     "KO" : 1,
     "EC" : 1,
     "SSO" : 1,
@@ -340,6 +341,10 @@ class AnnotationOntologyModule(BaseModule):
                     self.ftrtypes[ftr["id"]] = "gene"
             for item in to_remove:
                 self.object["features"].remove(item)
+        if "sequences" in self.object:
+            for ftr in self.object["sequences"]:
+                self.ftrhash[ftr["id"]] = ftr
+                self.ftrtypes[ftr["id"]] = "sequence"
         if "cdss" in self.object:
             for ftr in self.object["cdss"]:
                 self.ftrhash[ftr["id"]] = ftr
@@ -388,9 +393,19 @@ class AnnotationOntologyModule(BaseModule):
             'service': 'annotation_ontology_api',
             'service_ver': 1,
         }]
+        #All objects undergo these steps
+        # Setting ontology and eventarray in object
+        self.object["ontologies_present"] = self.ontologies_present
+        self.object["ontology_events"] = self.eventarray
+        for event in self.object["ontology_events"]:
+            if "ontology_terms" in event:
+                event.pop("ontology_terms")
+        
         #If a metagenome, saving features
-        if "feature_object" in params:
-            self.type = "KBaseMetagenomes.AnnotatedMetagenomeAssembly"
+        if len(self.type) >= 44 and self.type[0:44] == "KBaseMetagenomes.AnnotatedMetagenomeAssembly":
+            if "feature_object" not in params:
+                logger.critical("feature_object must exist in order to save the altered metagenome object!")
+            
             json_file_path = self.config["scratch"]+self.object["name"]+"_features.json"
             with open(json_file_path, 'w') as fid:
                 json.dump(params["feature_object"], fid)
@@ -401,34 +416,21 @@ class AnnotationOntologyModule(BaseModule):
             self.object['features_handle_ref'] = json_to_shock['handle']['hid']
             # Remove json file to avoid disk overload
             os.remove(json_file_path)
-        # Removing genbank handle ref because this breaks saving
-        self.object.pop('genbank_handle_ref', None)
-        # Setting ontology and eventarray in object
-        self.object["ontologies_present"] = self.ontologies_present
-        self.object["ontology_events"] = self.eventarray
-        for event in self.object["ontology_events"]:
-            if "ontology_terms" in event:
-                event.pop("ontology_terms")
-        #Adding missing fields in genome
-        if self.type == "KBaseGenomes.Genome":
+            # Removing genbank handle ref because this breaks saving
+            self.object.pop('genbank_handle_ref', None)
+        elif self.type == "KBaseGenomes.Genome":
+            # Removing genbank handle ref because this breaks saving
+            self.object.pop('genbank_handle_ref', None)
             self.check_genome(self.object,self.ref)
-        # Saving genome/metagenome object to workspace
-        gfu_param = {
-            "name" : params["output_name"],
-            "data" : self.object,
-            "upgrade" : 1,
-            "provenance" : params["provenance"],
-            "hidden" : 0
-        }
-        if isinstance(params["output_workspace"], int):
-            info = self.ws_client().get_workspace_info({"id":params["output_workspace"]});
-            gfu_param['workspace'] = info[1]
-        else:
-            gfu_param['workspace'] = params["output_workspace"]
-        save_output = self.gfu_client().save_one_genome(gfu_param);
+        elif self.type in ["KBaseSequences.ProteinSequenceSet","KBaseSequences.DNASequenceSet"]:
+            pass#No specific instructions for handling these types yet
+        if self.type in ["KBaseGenomes.Genome","KBaseMetagenomes.AnnotatedMetagenomeAssembly"]:
+            save_output = self.save_genome_or_metagenome(params["output_name"],params["output_workspace"],self.object)
+        elif self.type in ["KBaseSequences.ProteinSequenceSet","KBaseSequences.DNASequenceSet"]:
+            save_output = self.save_ws_object(params["output_name"],params["output_workspace"],self.object,self.type)            
         output = {}
-        output["output_ref"] = str(save_output["info"][6])+"/"+str(save_output["info"][0])+"/"+str(save_output["info"][4])
-        output["output_name"] = str(save_output["info"][1])
+        output["output_ref"] = self.wsinfo_to_ref(save_output)
+        output["output_name"] = str(save_output[1])
         return output
 
     #Function to standardize ontology tags
@@ -683,7 +685,7 @@ class AnnotationOntologyModule(BaseModule):
     def get_term_name(self,type,term):
         if type not in self.term_names:
             self.term_names[type] = {}
-            if type == "SSO" or type == "EC" or type == "TC" or type == "META" or type == "RO" or type == "KO" or type == "GO":
+            if type in ["SSO","AntiSmash","EC","TC","META","RO","KO","GO"]:
                 with open(self.module_dir + self.config["data"] + "/"+type+"_dictionary.json") as json_file:
                     ontology = json.load(json_file)
                     for term in ontology["term_hash"]:
