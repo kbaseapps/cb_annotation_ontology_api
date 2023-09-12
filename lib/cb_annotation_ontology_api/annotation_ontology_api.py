@@ -242,7 +242,8 @@ class AnnotationOntologyModule(BaseModule):
             "type":None,
             "input_ref":None,
             "input_workspace":None,
-            "output_name":None
+            "output_name":None,
+            "save":1
         })
         self.process_object(params)
         if not params["output_name"]:
