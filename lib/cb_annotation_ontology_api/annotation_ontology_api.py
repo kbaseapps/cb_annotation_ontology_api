@@ -234,7 +234,7 @@ class AnnotationOntologyModule(BaseModule):
         return output
     
     def add_annotation_ontology_events(self,params):
-        self.initialize_call("add_annotation_ontology_events",params,True)
+        self.initialize_call("add_annotation_ontology_events",params,True,no_print=["ontology_terms"])
         self.validate_args(params,["output_workspace","events"],{
             "provenance":[],
             "overwrite_matching":True,
