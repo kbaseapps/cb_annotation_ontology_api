@@ -55,6 +55,7 @@ class AnnotationOntologyModule(BaseModule):
         self.objectinfo = None
         self.type = None
         self.ref = None
+        self.msrxn_filter = True
         self.eventarray = []
         self.ftrhash = {}
         self.ftrtypes = {}
@@ -173,7 +174,7 @@ class AnnotationOntologyModule(BaseModule):
                                 id_hash[modelseed] = 1            
         return self.alias_hash[namespace]
                 
-    def translate_term_to_modelseed(self,term,filter=False):
+    def translate_term_to_modelseed(self,term):
         namespace = term.split(":").pop(0)
         output = []
         if namespace == "MSRXN":
@@ -185,7 +186,7 @@ class AnnotationOntologyModule(BaseModule):
             output = []
         else:
             output = self.get_alias_hash(namespace)[term]
-        if filter:
+        if self.msrxn_filter:
             new_output = []
             for item in output:
                 if item not in self.filtered_rxn:
@@ -202,8 +203,10 @@ class AnnotationOntologyModule(BaseModule):
             "object":None,
             "type":None,
             "input_ref":None,
+            "filter_msrxn_for_modeling":True,#TODO
             "input_workspace":None
         })
+        self.msrxn_filter = params["filter_msrxn_for_modeling"]
         self.process_object(params)
         event_query = None
         if params["query_events"]:
@@ -234,7 +237,7 @@ class AnnotationOntologyModule(BaseModule):
         return output
     
     def add_annotation_ontology_events(self,params):
-        self.initialize_call("add_annotation_ontology_events",params,True,no_print=["ontology_terms"])
+        self.initialize_call("add_annotation_ontology_events",params,True,no_print=["events"])
         self.validate_args(params,["output_workspace","events"],{
             "provenance":[],
             "overwrite_matching":True,
