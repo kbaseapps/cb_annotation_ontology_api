@@ -406,7 +406,7 @@ class AnnotationOntologyModule(BaseModule):
                 event.pop("ontology_terms")
         
         #If a metagenome, saving features
-        if len(self.type) >= 44 and self.type[0:44] == "KBaseMetagenomes.AnnotatedMetagenomeAssembly":
+        if self.type.startswith("KBaseMetagenomes.AnnotatedMetagenomeAssembly"):
             if "feature_object" not in params:
                 logger.critical("feature_object must exist in order to save the altered metagenome object!")
             
@@ -422,17 +422,17 @@ class AnnotationOntologyModule(BaseModule):
             os.remove(json_file_path)
             # Removing genbank handle ref because this breaks saving
             self.object.pop('genbank_handle_ref', None)
-        elif self.type == "KBaseGenomes.Genome":
+        elif self.type.startswith("KBaseGenomes.Genome"):
             # Removing genbank handle ref because this breaks saving
             self.object.pop('genbank_handle_ref', None)
             self.check_genome(self.object,self.ref)
-        elif self.type in ["KBaseSequences.ProteinSequenceSet","KBaseSequences.DNASequenceSet"]:
+        elif self.type.startswith("KBaseSequences.ProteinSequenceSet") or self.type.startswith("KBaseSequences.DNASequenceSet"):
             pass#No specific instructions for handling these types yet
         print("Type:"+self.type)
-        if self.type in ["KBaseGenomes.Genome","KBaseMetagenomes.AnnotatedMetagenomeAssembly"]:
+        if self.type.startswith("KBaseGenomes.Genome") or self.type.startswith("KBaseMetagenomes.AnnotatedMetagenomeAssembly"):
             print("test1")
             save_output = self.save_genome_or_metagenome(params["output_name"],params["output_workspace"],self.object)
-        elif self.type in ["KBaseSequences.ProteinSequenceSet","KBaseSequences.DNASequenceSet"]:
+        elif self.type.startswith("KBaseSequences.ProteinSequenceSet") or self.type.startswith("KBaseSequences.DNASequenceSet"):
             print("test2")
             save_output = self.save_ws_object(params["output_name"],params["output_workspace"],self.object,self.type)            
         output = {}
