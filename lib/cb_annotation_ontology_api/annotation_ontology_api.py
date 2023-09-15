@@ -428,9 +428,12 @@ class AnnotationOntologyModule(BaseModule):
             self.check_genome(self.object,self.ref)
         elif self.type in ["KBaseSequences.ProteinSequenceSet","KBaseSequences.DNASequenceSet"]:
             pass#No specific instructions for handling these types yet
+        print("Type:"+self.type)
         if self.type in ["KBaseGenomes.Genome","KBaseMetagenomes.AnnotatedMetagenomeAssembly"]:
+            print("test1")
             save_output = self.save_genome_or_metagenome(params["output_name"],params["output_workspace"],self.object)
         elif self.type in ["KBaseSequences.ProteinSequenceSet","KBaseSequences.DNASequenceSet"]:
+            print("test2")
             save_output = self.save_ws_object(params["output_name"],params["output_workspace"],self.object,self.type)            
         output = {}
         output["output_ref"] = self.wsinfo_to_ref(save_output)
