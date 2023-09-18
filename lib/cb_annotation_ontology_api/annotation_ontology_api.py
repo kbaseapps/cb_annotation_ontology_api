@@ -428,9 +428,7 @@ class AnnotationOntologyModule(BaseModule):
             self.check_genome(self.object,self.ref)
         elif self.type.startswith("KBaseSequences.ProteinSequenceSet") or self.type.startswith("KBaseSequences.DNASequenceSet"):
             pass#No specific instructions for handling these types yet
-        print("Type:"+self.type)
         if self.type.startswith("KBaseGenomes.Genome") or self.type.startswith("KBaseMetagenomes.AnnotatedMetagenomeAssembly"):
-            print("test1")
             save_output = self.save_genome_or_metagenome(params["output_name"],params["output_workspace"],self.object)
         elif self.type.startswith("KBaseSequences.ProteinSequenceSet") or self.type.startswith("KBaseSequences.DNASequenceSet"):
             print("test2")
