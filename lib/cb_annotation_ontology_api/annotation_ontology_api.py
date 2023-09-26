@@ -503,7 +503,7 @@ class AnnotationOntologyModule(BaseModule):
                 if alias[1] not in self.object_alias_hash:
                     self.object_alias_hash[alias[1]] = []
                 self.object_alias_hash[alias[1]].append(ftr["id"])
-                if alias[1].lower() not in lc_alias_hash:
+                if alias[1].lower() not in self.object_alias_hash:
                     self.object_alias_hash[alias[1].lower()] = []
                 if ftr["id"] not in self.object_alias_hash[alias[1].lower()]:
                     self.object_alias_hash[alias[1].lower()].append(ftr["id"])
