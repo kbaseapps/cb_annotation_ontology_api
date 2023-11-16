@@ -428,9 +428,7 @@ class AnnotationOntologyModule(BaseModule):
             self.check_genome(self.object,self.ref)
         elif self.type.startswith("KBaseSequences.ProteinSequenceSet") or self.type.startswith("KBaseSequences.DNASequenceSet"):
             pass#No specific instructions for handling these types yet
-        print("Type:"+self.type)
         if self.type.startswith("KBaseGenomes.Genome") or self.type.startswith("KBaseMetagenomes.AnnotatedMetagenomeAssembly"):
-            print("test1")
             save_output = self.save_genome_or_metagenome(params["output_name"],params["output_workspace"],self.object)
         elif self.type.startswith("KBaseSequences.ProteinSequenceSet") or self.type.startswith("KBaseSequences.DNASequenceSet"):
             print("test2")
@@ -505,7 +503,7 @@ class AnnotationOntologyModule(BaseModule):
                 if alias[1] not in self.object_alias_hash:
                     self.object_alias_hash[alias[1]] = []
                 self.object_alias_hash[alias[1]].append(ftr["id"])
-                if alias[1].lower() not in lc_alias_hash:
+                if alias[1].lower() not in self.object_alias_hash:
                     self.object_alias_hash[alias[1].lower()] = []
                 if ftr["id"] not in self.object_alias_hash[alias[1].lower()]:
                     self.object_alias_hash[alias[1].lower()].append(ftr["id"])
