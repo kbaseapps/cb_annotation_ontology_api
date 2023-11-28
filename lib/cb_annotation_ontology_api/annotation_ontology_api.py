@@ -66,7 +66,7 @@ class AnnotationOntologyModule(BaseModule):
         #Loading filtered reactions
         self.filtered_rxn = {}
         filename = self.module_dir + self.config["data"] + "/FilteredReactions.csv"
-        filtered_reaction_df = pd.read_csv(filename)
+        filtered_reaction_df = pd.read_csv(filename,sep='\t')
         for index,row in filtered_reaction_df.iterrows():
             self.filtered_rxn[row["id"]] = row["reason"]    
         logging.basicConfig(format='%(created)s %(levelname)s: %(message)s',
