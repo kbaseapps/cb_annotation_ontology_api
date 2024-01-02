@@ -196,14 +196,14 @@ class AnnotationOntologyModule(BaseModule):
         
     def get_annotation_ontology_events(self,params):
         self.initialize_call("get_annotation_ontology_events",params,True)
-        self.validate_args(params,[],{
+        params = self.validate_args(params,[],{
             "propagate":True,
             "query_events":None,
             "query_genes":None,
             "object":None,
             "type":None,
             "input_ref":None,
-            "filter_msrxn_for_modeling":True,#TODO
+            "filter_msrxn_for_modeling":True,
             "input_workspace":None
         })
         self.msrxn_filter = params["filter_msrxn_for_modeling"]
@@ -234,11 +234,13 @@ class AnnotationOntologyModule(BaseModule):
                     subfeature = self.ftrhash[feature["parent_gene"]]
                     if "ontology_terms" in subfeature:
                         self.integrate_terms_from_ftr(id,subfeature)
+        output["params"] = params
+        output["filter"] = self.msrxn_filter
         return output
     
     def add_annotation_ontology_events(self,params):
         self.initialize_call("add_annotation_ontology_events",params,True,no_print=["events"])
-        self.validate_args(params,["output_workspace","events"],{
+        params = self.validate_args(params,["output_workspace","events"],{
             "provenance":[],
             "overwrite_matching":True,
             "object":None,
