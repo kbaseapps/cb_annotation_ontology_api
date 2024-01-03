@@ -62,13 +62,14 @@ class AnnotationOntologyModule(BaseModule):
         self.alias_hash = {}
         self.object_alias_hash = {}
         self.term_names = {}
-        self.ontologies_present = {} 
+        self.ontologies_present = {}
         #Loading filtered reactions
         self.filtered_rxn = {}
         filename = self.module_dir + self.config["data"] + "/FilteredReactions.csv"
         filtered_reaction_df = pd.read_csv(filename,sep='\t')
         for index,row in filtered_reaction_df.iterrows():
             self.filtered_rxn[row["id"]] = row["reason"]    
+        self.supplemental_output = {"checked_reactions":{},"filtered_reactions":self.filtered_rxn}
         logging.basicConfig(format='%(created)s %(levelname)s: %(message)s',
                             level=logging.INFO)
     
@@ -189,6 +190,7 @@ class AnnotationOntologyModule(BaseModule):
         if self.msrxn_filter:
             new_output = []
             for item in output:
+                self.supplemental_output["checked_reactions"][item] = 1
                 if item not in self.filtered_rxn:
                     new_output.append(item)
             return new_output
@@ -234,8 +236,7 @@ class AnnotationOntologyModule(BaseModule):
                     subfeature = self.ftrhash[feature["parent_gene"]]
                     if "ontology_terms" in subfeature:
                         self.integrate_terms_from_ftr(id,subfeature)
-        output["events"][0]["params"] = params
-        output["events"][0]["filter"] = self.msrxn_filter
+        output["events"][0]["supplemental_output"] = self.supplemental_output
         return output
     
     def add_annotation_ontology_events(self,params):
