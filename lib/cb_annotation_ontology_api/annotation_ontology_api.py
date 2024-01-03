@@ -206,7 +206,6 @@ class AnnotationOntologyModule(BaseModule):
             "filter_msrxn_for_modeling":True,
             "input_workspace":None
         })
-        print("TEST1")
         self.msrxn_filter = params["filter_msrxn_for_modeling"]
         self.process_object(params)
         event_query = None
@@ -235,9 +234,8 @@ class AnnotationOntologyModule(BaseModule):
                     subfeature = self.ftrhash[feature["parent_gene"]]
                     if "ontology_terms" in subfeature:
                         self.integrate_terms_from_ftr(id,subfeature)
-        output["params"] = params
-        output["filter"] = self.msrxn_filter
-        print("TEST2")
+        output["events"][0]["params"] = params
+        output["events"][0]["filter"] = self.msrxn_filter
         return output
     
     def add_annotation_ontology_events(self,params):
