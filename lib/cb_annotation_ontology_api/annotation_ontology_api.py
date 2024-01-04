@@ -190,8 +190,11 @@ class AnnotationOntologyModule(BaseModule):
         if self.msrxn_filter:
             new_output = []
             for item in output:
-                self.supplemental_output["checked_reactions"][item] = 1
-                if item not in self.filtered_rxn:
+                search = item
+                if search[0:6] == "MSRXN:":
+                    search = search[6:]
+                self.supplemental_output["checked_reactions"][search] = 1
+                if search not in self.filtered_rxn:
                     new_output.append(item)
             return new_output
         return output
