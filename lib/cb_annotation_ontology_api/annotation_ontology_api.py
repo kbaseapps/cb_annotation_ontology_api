@@ -233,7 +233,7 @@ class AnnotationOntologyModule(BaseModule):
                         subfeature = self.ftrhash[cds]
                         if "ontology_terms" in subfeature:
                             self.integrate_terms_from_ftr(id,subfeature)
-                if "parent_gene" in feature:
+                if "parent_gene" in feature and feature["parent_gene"] in self.ftrhash:
                     subfeature = self.ftrhash[feature["parent_gene"]]
                     if "ontology_terms" in subfeature:
                         self.integrate_terms_from_ftr(id,subfeature)
@@ -521,7 +521,12 @@ class AnnotationOntologyModule(BaseModule):
         if type == "gene" and "cdss" not in ftr:
             ftr["cdss"] = []
         if "dna_sequence_length" not in ftr:
-            ftr["dna_sequence_length"] = ftr["location"][0][3]
+            if "location" in ftr:
+                ftr["dna_sequence_length"] = ftr["location"][0][3]
+            elif "dna_sequence" in ftr:
+                ftr["dna_sequence_length"] = len(ftr["dna_sequence"])
+            elif "protein_translation" in ftr:
+                ftr["dna_sequence_length"] = len(ftr["protein_translation"])*3
         if "aliases" in ftr:
             for i in range(0, len(ftr["aliases"])):
                 if isinstance(ftr["aliases"][i], str):
