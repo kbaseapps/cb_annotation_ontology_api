@@ -434,8 +434,7 @@ class AnnotationOntologyModule(BaseModule):
         if self.type.startswith("KBaseGenomes.Genome") or self.type.startswith("KBaseMetagenomes.AnnotatedMetagenomeAssembly"):
             save_output = self.save_genome_or_metagenome(params["output_name"],params["output_workspace"],self.object)
         elif self.type.startswith("KBaseSequences.ProteinSequenceSet") or self.type.startswith("KBaseSequences.DNASequenceSet"):
-            print("test2")
-            save_output = self.save_ws_object(params["output_name"],params["output_workspace"],self.object,self.type)            
+            save_output = self.save_ws_object(params["output_name"],params["output_workspace"],self.object,self.type)[0]
         output = {}
         output["output_ref"] = self.wsinfo_to_ref(save_output)
         output["output_name"] = str(save_output[1])
