@@ -45,7 +45,8 @@ ontology_hash = {
     "BIGGCPD" : 1,
     "GO" : 1,
     "TC" : 1,
-    "RHEA" : 1
+    "RHEA" : 1,
+    "TIGR": 1
 };
 
 class AnnotationOntologyModule(BaseModule):
@@ -240,7 +241,7 @@ class AnnotationOntologyModule(BaseModule):
         return output
     
     def add_annotation_ontology_events(self,params):
-        self.initialize_call("add_annotation_ontology_events",params,True,no_print=["events"])
+        self.initialize_call("add_annotation_ontology_events",params,True,no_print=["events","object"],no_prov_params=["object","events","feature_object"])
         params = self.validate_args(params,["output_workspace","events"],{
             "provenance":[],
             "overwrite_matching":True,
@@ -387,19 +388,6 @@ class AnnotationOntologyModule(BaseModule):
             self.process_feature_aliases(ftr)            
 
     def save_object(self,params):
-        #Setting provenance
-        provenance_params = {}
-        for key in params:
-            if not key == "object" and not key == "events" and not "feature_object":
-                provenance_params[key] = params[key]            
-        provenance = [{
-            'description': 'A function that adds ontology terms to a genome or metagenome',
-            'input_ws_objects': [],
-            'method': 'add_annotation_ontology_events',
-            'method_params': [provenance_params],
-            'service': 'annotation_ontology_api',
-            'service_ver': 1,
-        }]
         #All objects undergo these steps
         # Setting ontology and eventarray in object
         self.object["ontologies_present"] = self.ontologies_present
@@ -697,7 +685,7 @@ class AnnotationOntologyModule(BaseModule):
     def get_term_name(self,type,term):
         if type not in self.term_names:
             self.term_names[type] = {}
-            if type in ["SSO","AntiSmash","EC","TC","META","RO","KO","GO"]:
+            if type in ["SSO","AntiSmash","EC","TC","META","RO","KO","GO","TIGRFAM"]:
                 with open(self.module_dir + self.config["data"] + "/"+type+"_dictionary.json") as json_file:
                     ontology = json.load(json_file)
                     for term in ontology["term_hash"]:
