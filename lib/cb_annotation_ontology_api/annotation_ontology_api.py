@@ -28,7 +28,8 @@ ontology_translation = {
     "METACYC" : "META",
     "SEED" : "SSO",
     "TCDB" : "TC",
-    "MODELSEED" : "MSRXN"
+    "MODELSEED" : "MSRXN",
+    "TIGRFAM" : "TIGR"
 }
 
 ontology_hash = {
@@ -685,7 +686,7 @@ class AnnotationOntologyModule(BaseModule):
     def get_term_name(self,type,term):
         if type not in self.term_names:
             self.term_names[type] = {}
-            if type in ["SSO","AntiSmash","EC","TC","META","RO","KO","GO","TIGRFAM"]:
+            if type in ["SSO","AntiSmash","EC","TC","META","RO","KO","GO","TIGR"]:
                 with open(self.module_dir + self.config["data"] + "/"+type+"_dictionary.json") as json_file:
                     ontology = json.load(json_file)
                     for term in ontology["term_hash"]:
