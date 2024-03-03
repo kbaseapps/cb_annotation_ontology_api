@@ -11,7 +11,7 @@ MAINTAINER KBase Developer
 RUN pip install --upgrade pip \
     && pip install pandas
     
-RUN echo '4' >/dev/null && mkdir deps && cd deps && \
+RUN echo '5' >/dev/null && mkdir deps && cd deps && \
 	git clone --branch main https://github.com/cshenry/KBBaseModules.git
 
 # -----------------------------------------
