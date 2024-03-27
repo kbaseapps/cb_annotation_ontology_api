@@ -48,7 +48,7 @@ ontology_hash = {
     "TC" : 1,
     "RHEA" : 1,
     "TIGR": 1,
-    "PFAM": 1,
+    "PF": 1,
     "PTHR": 1,
 };
 
@@ -704,7 +704,7 @@ class AnnotationOntologyModule(BaseModule):
     def get_term_name(self,type,term):
         if type not in self.term_names:
             self.term_names[type] = {}
-            if type in ["SSO","AntiSmash","EC","TC","META","RO","KO","GO","TIGR","PFAM","PTHR"]:
+            if type in ["SSO","AntiSmash","EC","TC","META","RO","KO","GO","TIGR","PF","PTHR"]:
                 with open(self.module_dir + self.config["data"] + "/"+type+"_dictionary.json") as json_file:
                     ontology = json.load(json_file)
                     for term in ontology["term_hash"]:
