@@ -277,7 +277,7 @@ class AnnotationOntologyModule(BaseModule):
             else:
                 params["output_name"] = self.object["id"]
         if "clear_existing" in params and params["clear_existing"] == 1: 
-            self.eventarray = [] 
+            self.eventarray = []
         output = {
             "ftrs_not_found" : [],"ftrs_found" : 0,"terms_not_found" : []
         }
@@ -559,7 +559,13 @@ class AnnotationOntologyModule(BaseModule):
                     tag = self.clean_tag(original_tag)
                     term = self.clean_term(original_term,original_tag,tag)
                     modelseed_ids = self.translate_term_to_modelseed(term)
-                    for event_index in feature["ontology_terms"][original_tag][original_term]:
+                    for j,event_index in enumerate(feature["ontology_terms"][original_tag][original_term]):
+                        if event_index == None:
+                            for i,event in enumerate(self.eventarray):
+                                if event["ontology_id"] == tag:
+                                    event_index = i
+                                    feature["ontology_terms"][original_tag][original_term][j] = i
+                                    break
                         if event_index < len(self.eventarray):
                             if "ontology_terms" not in self.eventarray[event_index]:
                                 self.eventarray[event_index]["ontology_terms"] = {}
@@ -587,8 +593,10 @@ class AnnotationOntologyModule(BaseModule):
         term_data = event["ontology_terms"][ftrid]
         event_index = None
         for i, item in enumerate(self.eventarray):
-            if item == event:
+            if item["event_id"] == event["event_id"]:
                 event_index = i
+        if event_index == None:
+            print("Event not found!",ftrid,str(event),str(feature))
         output = {"terms_not_found":[]}
         if "ontology_terms" not in feature:
             feature["ontology_terms"] = {}
