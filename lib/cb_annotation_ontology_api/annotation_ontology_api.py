@@ -76,6 +76,21 @@ class AnnotationOntologyModule(BaseModule):
         logging.basicConfig(format='%(created)s %(levelname)s: %(message)s',
                             level=logging.INFO)
     
+    def initialize_call(self,method,params,print_params=False,no_print=[],no_prov_params=[]):
+        BaseModule.initialize_call(self,method,params,print_params,no_print,no_prov_params)
+        self.object = None
+        self.objectinfo = None
+        self.type = None
+        self.ref = None
+        self.msrxn_filter = True
+        self.eventarray = []
+        self.ftrhash = {}
+        self.ftrtypes = {}
+        self.alias_hash = {}
+        self.object_alias_hash = {}
+        self.term_names = {}
+        self.ontologies_present = {}
+
     def get_alias_hash(self,namespace):
         if "MSRXN" not in self.alias_hash:
             filename = self.module_dir + self.config["data"] + "/msrxn_hash.json"
@@ -507,7 +522,8 @@ class AnnotationOntologyModule(BaseModule):
             ftr["functions"] = re.split("\s*;\s+|\s+[\@\/]\s+",ftr["function"])
             del ftr["function"]
             #Clearing old ontology terms rather than attempting to translate them
-            ftr["ontology_terms"] = {}
+            if "ontology_terms" not in ftr:
+                ftr["ontology_terms"] = {}
         if type == "gene" and "cdss" not in ftr:
             ftr["cdss"] = []
         if "dna_sequence_length" not in ftr:
