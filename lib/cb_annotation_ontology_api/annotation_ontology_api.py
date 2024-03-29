@@ -578,8 +578,8 @@ class AnnotationOntologyModule(BaseModule):
                                 termdata["modelseed_ids"] = modelseed_ids
                             if "ontology_evidence" in feature:
                                 if term in feature["ontology_evidence"]:
-                                    if str(event_index) in feature["ontology_evidence"][original_term]:
-                                        termdata["evidence"] = feature["ontology_evidence"][original_term][str(event_index)]
+                                    if str(event_index) in feature["ontology_evidence"][term]:
+                                        termdata["evidence"] = feature["ontology_evidence"][term][str(event_index)]
                             found = False
                             for outterm in self.eventarray[event_index]["ontology_terms"][id]:
                                 if outterm["term"] == term:
