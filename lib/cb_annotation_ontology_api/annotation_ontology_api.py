@@ -375,10 +375,10 @@ class AnnotationOntologyModule(BaseModule):
             for ftr in self.object["cdss"]:
                 self.ftrhash[ftr["id"]] = ftr
                 self.ftrtypes[ftr["id"]] = "cds"
-        if "mrnas" in self.object:
-            for ftr in self.object["mrnas"]:
-                self.ftrhash[ftr["id"]] = ftr
-                self.ftrtypes[ftr["id"]] = "mrna"
+        #if "mrnas" in self.object:
+        #    for ftr in self.object["mrnas"]:
+        #        self.ftrhash[ftr["id"]] = ftr
+        #        self.ftrtypes[ftr["id"]] = "mrna"
         if "non_coding_features" in self.object:
             for ftr in self.object["non_coding_features"]:
                 self.ftrhash[ftr["id"]] = ftr
